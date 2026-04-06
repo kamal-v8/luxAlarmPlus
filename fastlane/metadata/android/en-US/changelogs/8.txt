@@ -1,0 +1,4 @@
+- Added per-alarm volume control
+- Added a vibration toggle for each alarm
+- Ordered alarm list to match AOSP alarm clock behavior: sorted by (hour, min) asc
+- Moved "Delete" button to alarm entry row instead of edit dialog
