@@ -1,13 +1,13 @@
 [versions]
 agp = "9.1.1"
-kotlin = "2.2.20"
-coreKtx = "1.17.0"
-lifecycleRuntimeKtx = "2.9.4"
-activityCompose = "1.11.0"
-composeBom = "2025.09.01"
-room = "2.8.1"
-ksp = "2.3.2"
-spotless = "8.0.0"
+kotlin = "2.3.21"
+coreKtx = "1.18.0"
+lifecycleRuntimeKtx = "2.10.0"
+activityCompose = "1.13.0"
+composeBom = "2026.04.01"
+room = "2.8.4"
+ksp = "2.3.7"
+spotless = "8.4.0"
 junit = "4.13.2"
 kotlinxCoroutinesTest = "1.10.2"
 androidxTestCore = "1.7.0"
@@ -35,7 +35,6 @@ androidx-rules = { group = "androidx.test", name = "rules", version.ref = "rules
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
