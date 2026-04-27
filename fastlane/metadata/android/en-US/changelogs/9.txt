@@ -1,0 +1,2 @@
+- Lowered minimum required lux level from 10 to 1 to support very dim environments
+- Upgraded Gradle and Android Gradle Plugin
