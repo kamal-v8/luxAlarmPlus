@@ -24,6 +24,10 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -102,7 +106,6 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
             }
         }
         setupFullscreen()
-        setupLockScreenPinning()
     }
 
     private fun setupLightSensor() {
@@ -175,37 +178,64 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         window.attributes = layoutParams
     }
 
-    private fun setupLockScreenPinning() {
-        if (!lockScreenPinEnabled) return
+    /** Called when window gains or loses focus. Start pinning only after we actually have focus. */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && lockScreenPinEnabled) {
+            dismissKeyguardAndLockTask()
+        }
+    }
 
-        // Attempt to dismiss the keyguard so the activity shows over the lock screen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-            if (keyguardManager.isKeyguardLocked) {
+    /** Prevent the user from leaving cleanly via home/recent apps buttons. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (lockScreenPinEnabled) {
+            // User tried to leave; re-acquire focus and re-attempt lock task
+            window.decorView.postDelayed({ dismissKeyguardAndLockTask() }, 250)
+        }
+    }
+
+    private fun dismissKeyguardAndLockTask() {
+        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        if (keyguardManager.isKeyguardLocked) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 keyguardManager.requestDismissKeyguard(
                     this,
                     object : KeyguardManager.KeyguardDismissCallback() {
                         override fun onDismissSucceeded() {
-                            super.onDismissSucceeded()
+                            Log.i("AlarmActivity", "Keyguard dismissed — trying lock task")
                             tryStartLockTask()
                         }
                         override fun onDismissError() {
-                            super.onDismissError()
+                            Log.w("AlarmActivity", "Keyguard dismiss error — trying lock task anyway")
                             tryStartLockTask()
                         }
                     }
                 )
-                return
+            } else {
+                tryStartLockTask()
             }
+        } else {
+            // Device already unlocked — go straight to lock task
+            tryStartLockTask()
         }
-        tryStartLockTask()
     }
 
     private fun tryStartLockTask() {
         try {
             startLockTask()
+            Log.i("AlarmActivity", "Lock task started successfully")
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w("AlarmActivity", "startLockTask failed, retrying in 750ms", e)
+            // Retry after a short delay — sometimes needs another focus cycle
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    startLockTask()
+                    Log.i("AlarmActivity", "Lock task succeeded on retry")
+                } catch (e2: Exception) {
+                    Log.e("AlarmActivity", "Lock task failed — ensure Settings > Security > Screen Pinning is enabled.", e2)
+                }
+            }, 750)
         }
     }
 
