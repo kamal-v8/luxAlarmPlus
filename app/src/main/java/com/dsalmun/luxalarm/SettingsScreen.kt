@@ -89,6 +89,13 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     var sliderValue by remember(requiredLuxLevel) { mutableFloatStateOf(requiredLuxLevel) }
     val currentLightLevel = rememberLightSensorValue()
 
+    val lockScreenPinEnabled by settingsManager.lockScreenPinEnabled.collectAsState()
+    val luxHoldTimerEnabled by settingsManager.luxHoldTimerEnabled.collectAsState()
+    val luxHoldDurationSeconds by settingsManager.luxHoldDurationSeconds.collectAsState()
+    var durationSliderValue by remember(luxHoldDurationSeconds) {
+        mutableFloatStateOf(luxHoldDurationSeconds.toFloat())
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -120,6 +127,158 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 onValueChange = { sliderValue = it },
                 onValueChangeFinished = { settingsManager.setRequiredLuxLevel(sliderValue) },
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LockScreenPinSetting(
+                enabled = lockScreenPinEnabled,
+                onToggle = { settingsManager.setLockScreenPinEnabled(it) },
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LuxHoldTimerSetting(
+                timerEnabled = luxHoldTimerEnabled,
+                durationSeconds = durationSliderValue,
+                onTimerToggle = { settingsManager.setLuxHoldTimerEnabled(it) },
+                onDurationChange = { durationSliderValue = it },
+                onDurationChangeFinished = {
+                    settingsManager.setLuxHoldDurationSeconds(durationSliderValue.toInt())
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LockScreenPinSetting(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Lock Screen Pinning",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "When enabled, the alarm screen is pinned on the lock screen so it can't be dismissed by navigating away.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onToggle,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LuxHoldTimerSetting(
+    timerEnabled: Boolean,
+    durationSeconds: Float,
+    onTimerToggle: (Boolean) -> Unit,
+    onDurationChange: (Float) -> Unit,
+    onDurationChangeFinished: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Lux Hold Timer",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Require the light level to stay above the threshold for a set duration before the alarm can be turned off.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = timerEnabled,
+                    onCheckedChange = onTimerToggle,
+                )
+            }
+
+            if (timerEnabled) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Hold Duration",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "How long the light must stay above the threshold before the alarm can be dismissed.",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${SettingsManager.MIN_LUX_HOLD_DURATION}s",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                    Slider(
+                        value = durationSeconds,
+                        onValueChange = onDurationChange,
+                        onValueChangeFinished = onDurationChangeFinished,
+                        valueRange = SettingsManager.MIN_LUX_HOLD_DURATION.toFloat()..SettingsManager.MAX_LUX_HOLD_DURATION.toFloat(),
+                        steps = SettingsManager.MAX_LUX_HOLD_DURATION - SettingsManager.MIN_LUX_HOLD_DURATION - 1,
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
+                    Text(
+                        text = "${SettingsManager.MAX_LUX_HOLD_DURATION}s",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                }
+
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "${durationSeconds.toInt()} seconds",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
     }
 }
@@ -233,3 +392,4 @@ private fun LuxLevelSetting(
         }
     }
 }
+
