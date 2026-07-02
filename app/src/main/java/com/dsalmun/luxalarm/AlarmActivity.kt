@@ -16,6 +16,7 @@
  */
 package com.dsalmun.luxalarm
 
+import android.app.KeyguardManager
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -101,14 +102,7 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
             }
         }
         setupFullscreen()
-
-        if (lockScreenPinEnabled) {
-            try {
-                startLockTask()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        setupLockScreenPinning()
     }
 
     private fun setupLightSensor() {
@@ -119,7 +113,7 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         lightSensor?.let { sensor ->
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
+            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
         }
     }
 
@@ -159,6 +153,8 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Max brightness for alarm visibility
+        setMaxBrightness()
     }
 
     private fun setupFullscreen() {
@@ -170,6 +166,46 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
                         WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 }
             }
+        }
+    }
+
+    private fun setMaxBrightness() {
+        val layoutParams = window.attributes
+        layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL
+        window.attributes = layoutParams
+    }
+
+    private fun setupLockScreenPinning() {
+        if (!lockScreenPinEnabled) return
+
+        // Attempt to dismiss the keyguard so the activity shows over the lock screen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+            if (keyguardManager.isKeyguardLocked) {
+                keyguardManager.requestDismissKeyguard(
+                    this,
+                    object : KeyguardManager.KeyguardDismissCallback() {
+                        override fun onDismissSucceeded() {
+                            super.onDismissSucceeded()
+                            tryStartLockTask()
+                        }
+                        override fun onDismissError() {
+                            super.onDismissError()
+                            tryStartLockTask()
+                        }
+                    }
+                )
+                return
+            }
+        }
+        tryStartLockTask()
+    }
+
+    private fun tryStartLockTask() {
+        try {
+            startLockTask()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

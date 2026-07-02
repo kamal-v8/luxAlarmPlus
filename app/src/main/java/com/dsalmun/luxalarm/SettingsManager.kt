@@ -89,6 +89,6 @@ class SettingsManager(context: Context) {
         const val DEFAULT_LUX_HOLD_TIMER_ENABLED = false
         const val DEFAULT_LUX_HOLD_DURATION = 15
         const val MIN_LUX_HOLD_DURATION = 5
-        const val MAX_LUX_HOLD_DURATION = 90
+        const val MAX_LUX_HOLD_DURATION = 120
     }
 }

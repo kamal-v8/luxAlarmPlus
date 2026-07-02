@@ -21,11 +21,15 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +64,7 @@ fun rememberLightSensorValue(): Float {
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     lightSensor?.let {
-                        sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI)
+                        sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_NORMAL)
                     }
                 }
                 Lifecycle.Event.ON_PAUSE -> {
@@ -82,6 +86,7 @@ fun rememberLightSensorValue(): Float {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun SettingsScreen(onBackClick: () -> Unit) {
     val settingsManager = remember { AppContainer.settingsManager }
@@ -109,16 +114,15 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                         )
                     }
                 },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.primary,
-                    ),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.primary,
+                ),
             )
         },
     ) { innerPadding ->
         Column(
-            modifier = Modifier.padding(innerPadding).fillMaxSize().padding(16.dp),
+            modifier = Modifier.padding(innerPadding).fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Top,
         ) {
             LuxLevelSetting(
@@ -151,6 +155,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
 }
 
 @Composable
+
 private fun LockScreenPinSetting(
     enabled: Boolean,
     onToggle: (Boolean) -> Unit,
@@ -228,54 +233,105 @@ private fun LuxHoldTimerSetting(
                 )
             }
 
-            if (timerEnabled) {
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = "Hold Duration",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "How long the light must stay above the threshold before the alarm can be dismissed.",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+            // Modern timer control card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(
-                        text = "${SettingsManager.MIN_LUX_HOLD_DURATION}s",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    )
-                    Slider(
-                        value = durationSeconds,
-                        onValueChange = onDurationChange,
-                        onValueChangeFinished = onDurationChangeFinished,
-                        valueRange = SettingsManager.MIN_LUX_HOLD_DURATION.toFloat()..SettingsManager.MAX_LUX_HOLD_DURATION.toFloat(),
-                        steps = SettingsManager.MAX_LUX_HOLD_DURATION - SettingsManager.MIN_LUX_HOLD_DURATION - 1,
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    )
-                    Text(
-                        text = "${SettingsManager.MAX_LUX_HOLD_DURATION}s",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    )
-                }
+                    // Duration display
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "${durationSeconds.toInt()}",
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Text(
+                                text = "seconds",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            )
+                            Text(
+                                text = "hold duration",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
 
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "${durationSeconds.toInt()} seconds",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Slider with min/max labels
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "${SettingsManager.MIN_LUX_HOLD_DURATION}s",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        )
+                        Slider(
+                            value = durationSeconds,
+                            onValueChange = onDurationChange,
+                            onValueChangeFinished = onDurationChangeFinished,
+                            valueRange = SettingsManager.MIN_LUX_HOLD_DURATION.toFloat()..SettingsManager.MAX_LUX_HOLD_DURATION.toFloat(),
+                            steps = SettingsManager.MAX_LUX_HOLD_DURATION - SettingsManager.MIN_LUX_HOLD_DURATION - 1,
+                            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+                            ),
+                        )
+                        Text(
+                            text = "${SettingsManager.MAX_LUX_HOLD_DURATION}s",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Progress bar
+                    val progress =
+                        (durationSeconds - SettingsManager.MIN_LUX_HOLD_DURATION) /
+                        (SettingsManager.MAX_LUX_HOLD_DURATION - SettingsManager.MIN_LUX_HOLD_DURATION).toFloat()
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
                         color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Keep light above the threshold for this duration to dismiss the alarm",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
             }
@@ -392,4 +448,3 @@ private fun LuxLevelSetting(
         }
     }
 }
-
