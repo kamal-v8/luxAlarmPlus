@@ -19,11 +19,8 @@ package com.dsalmun.luxalarm
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
-import android.content.Intent
 import android.hardware.SensorEventListener
-import android.provider.Settings
 import android.hardware.SensorManager
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +28,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -97,7 +93,6 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     val currentLightLevel = rememberLightSensorValue()
 
     val lockScreenPinEnabled by settingsManager.lockScreenPinEnabled.collectAsState()
-    var showPinningDialog by remember { mutableStateOf(false) }
     val luxHoldTimerEnabled by settingsManager.luxHoldTimerEnabled.collectAsState()
     val luxHoldDurationSeconds by settingsManager.luxHoldDurationSeconds.collectAsState()
     var durationSliderValue by remember(luxHoldDurationSeconds) {
@@ -139,13 +134,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
 
             LockScreenPinSetting(
                 enabled = lockScreenPinEnabled,
-                onToggle = {
-                    if (it && !settingsManager.hasPromptedForScreenPinningSetup()) {
-                        showPinningDialog = true
-                    } else {
-                        settingsManager.setLockScreenPinEnabled(it)
-                    }
-                },
+                onToggle = { settingsManager.setLockScreenPinEnabled(it) },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -159,38 +148,6 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                     settingsManager.setLuxHoldDurationSeconds(durationSliderValue.toInt())
                 },
             )
-
-            // Screen Pinning Setup Dialog
-            val context = LocalContext.current
-            if (showPinningDialog) {
-                AlertDialog(
-                    onDismissRequest = { showPinningDialog = false },
-                    title = { Text("Screen Pinning Required") },
-                    text = {
-                        Column {
-                            Text("To lock the screen when the alarm rings, you must first enable \"Screen Pinning\" in your phone's System Settings (Settings → Security → Screen Pinning).")
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("After enabling it there, return to the app and the feature will work.", fontSize = 12.sp)
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                settingsManager.setLockScreenPinningSetupPrompted(true)
-                                showPinningDialog = false
-                                context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
-                            }
-                        ) {
-                            Text("Open Security Settings")
-                        }
-                    },
-dismissButton = {
-                        TextButton(onClick = { showPinningDialog = false }) {
-                            Text("Cancel")
-                        }
-                    },
-                )
-            }
         }
     }
 }
@@ -220,7 +177,7 @@ private fun LockScreenPinSetting(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "When enabled, the alarm screen is pinned on the lock screen so it can't be dismissed by navigating away.",
+                        text = "When enabled, the alarm screen will keep coming back if you try to navigate away (Home, Recents) until you meet the lux requirement and dismiss it.",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )

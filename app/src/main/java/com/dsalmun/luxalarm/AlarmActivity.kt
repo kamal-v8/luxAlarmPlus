@@ -16,7 +16,6 @@
  */
 package com.dsalmun.luxalarm
 
-import android.app.KeyguardManager
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -24,14 +23,9 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.PowerManager
-import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -69,8 +63,9 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
     private var holdElapsedSeconds by mutableFloatStateOf(0f)
     private var luxAboveThresholdSince: Long? = null
 
-    // Lock screen pinning
+    // Screen pinning (self-re-launch approach)
     private var lockScreenPinEnabled by mutableStateOf(SettingsManager.DEFAULT_LOCK_SCREEN_PIN)
+    private var alarmDismissed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -179,80 +174,46 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         window.attributes = layoutParams
     }
 
-    /** Called when window gains or loses focus. Start pinning only after we actually have focus. */
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && lockScreenPinEnabled) {
-            dismissKeyguardAndLockTask()
-        }
-    }
+    // ─── Screen Pinning (self-re-launch) ────────────────────────────────
 
-    /** Prevent the user from leaving cleanly via home/recent apps buttons. */
+    /**
+     * Called when the user presses the Home button. If pinning is enabled
+     * and the alarm hasn't been dismissed yet, re-launch this activity
+     * so it comes right back.
+     */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (lockScreenPinEnabled) {
-            // User tried to leave; re-acquire focus and re-attempt lock task
-            window.decorView.postDelayed({ dismissKeyguardAndLockTask() }, 250)
+        if (lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
+            relaunchSelf()
         }
     }
 
-    private fun dismissKeyguardAndLockTask() {
-        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-        if (keyguardManager.isKeyguardLocked) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                keyguardManager.requestDismissKeyguard(
-                    this,
-                    object : KeyguardManager.KeyguardDismissCallback() {
-                        override fun onDismissSucceeded() {
-                            Log.i("AlarmActivity", "Keyguard dismissed — trying lock task")
-                            tryStartLockTask()
-                        }
-                        override fun onDismissError() {
-                            Log.w("AlarmActivity", "Keyguard dismiss error — trying lock task anyway")
-                            tryStartLockTask()
-                        }
-                    }
-                )
-            } else {
-                tryStartLockTask()
-            }
-        } else {
-            // Device already unlocked — go straight to lock task
-            tryStartLockTask()
+    /**
+     * Called when the activity is no longer visible (e.g. swiped from Recents).
+     * Re-launch if the alarm is still ringing and hasn't been legitimately dismissed.
+     */
+    override fun onStop() {
+        super.onStop()
+        if (lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
+            relaunchSelf()
         }
     }
 
-    private fun tryStartLockTask() {
-        try {
-            startLockTask()
-            Log.i("AlarmActivity", "Lock task started successfully")
-        } catch (e: Exception) {
-            Log.w("AlarmActivity", "startLockTask failed, retrying in 750ms", e)
-            // Retry after a short delay — sometimes needs another focus cycle
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    startLockTask()
-                    Log.i("AlarmActivity", "Lock task succeeded on retry")
-                } catch (e2: Exception) {
-                    Log.e("AlarmActivity", "Lock task failed — ensure Settings > Security > Screen Pinning is enabled.", e2)
-                    Toast.makeText(
-                        this,
-                        "Screen Pinning not enabled. Go to Settings > Security > Screen Pinning.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }, 750)
+    /**
+     * Re-launch this activity on top, same way the AlarmService's
+     * full-screen notification does it.
+     */
+    private fun relaunchSelf() {
+        val intent = Intent(this, AlarmActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("alarm_id", alarmId)
         }
+        startActivity(intent)
     }
 
     private fun stopAlarm() {
-        if (lockScreenPinEnabled) {
-            try {
-                stopLockTask()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        // Mark as dismissed BEFORE finishing so onStop won't re-launch
+        alarmDismissed = true
         val stopIntent =
             Intent(this, AlarmService::class.java).apply {
                 action = AlarmService.ACTION_STOP_ALARM
@@ -260,6 +221,10 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
             }
         startService(stopIntent)
         finish()
+    }
+
+    companion object {
+        private const val TAG = "AlarmActivity"
     }
 }
 
