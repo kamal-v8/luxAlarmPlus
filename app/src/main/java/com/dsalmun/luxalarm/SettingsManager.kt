@@ -76,10 +76,19 @@ class SettingsManager(context: Context) {
         _luxHoldDurationSeconds.value = clamped
     }
 
+    fun hasPromptedForScreenPinningSetup(): Boolean {
+        return prefs.getBoolean(KEY_LOCK_SCREEN_PINNING_SETUP_PROMPTED, false)
+    }
+
+    fun setLockScreenPinningSetupPrompted(prompted: Boolean) {
+        prefs.edit { putBoolean(KEY_LOCK_SCREEN_PINNING_SETUP_PROMPTED, prompted) }
+    }
+
     companion object {
         private const val PREFS_NAME = "lux_alarm_settings"
         private const val KEY_REQUIRED_LUX_LEVEL = "required_lux_level"
         private const val KEY_LOCK_SCREEN_PIN = "lock_screen_pin_enabled"
+        private const val KEY_LOCK_SCREEN_PINNING_SETUP_PROMPTED = "lock_screen_pinning_setup_prompted"
         private const val KEY_LUX_HOLD_TIMER_ENABLED = "lux_hold_timer_enabled"
         private const val KEY_LUX_HOLD_DURATION = "lux_hold_duration_seconds"
         const val DEFAULT_LUX_LEVEL = 50f

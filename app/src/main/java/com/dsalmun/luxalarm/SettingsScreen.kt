@@ -19,7 +19,9 @@ package com.dsalmun.luxalarm
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
+import android.content.Intent
 import android.hardware.SensorEventListener
+import android.provider.Settings
 import android.hardware.SensorManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.*
@@ -95,6 +97,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     val currentLightLevel = rememberLightSensorValue()
 
     val lockScreenPinEnabled by settingsManager.lockScreenPinEnabled.collectAsState()
+    var showPinningDialog by remember { mutableStateOf(false) }
     val luxHoldTimerEnabled by settingsManager.luxHoldTimerEnabled.collectAsState()
     val luxHoldDurationSeconds by settingsManager.luxHoldDurationSeconds.collectAsState()
     var durationSliderValue by remember(luxHoldDurationSeconds) {
@@ -136,7 +139,13 @@ fun SettingsScreen(onBackClick: () -> Unit) {
 
             LockScreenPinSetting(
                 enabled = lockScreenPinEnabled,
-                onToggle = { settingsManager.setLockScreenPinEnabled(it) },
+                onToggle = {
+                    if (it && !settingsManager.hasPromptedForScreenPinningSetup()) {
+                        showPinningDialog = true
+                    } else {
+                        settingsManager.setLockScreenPinEnabled(it)
+                    }
+                },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -150,6 +159,38 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                     settingsManager.setLuxHoldDurationSeconds(durationSliderValue.toInt())
                 },
             )
+
+            // Screen Pinning Setup Dialog
+            val context = LocalContext.current
+            if (showPinningDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPinningDialog = false },
+                    title = { Text("Screen Pinning Required") },
+                    text = {
+                        Column {
+                            Text("To lock the screen when the alarm rings, you must first enable \"Screen Pinning\" in your phone's System Settings (Settings → Security → Screen Pinning).")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("After enabling it there, return to the app and the feature will work.", fontSize = 12.sp)
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                settingsManager.setLockScreenPinningSetupPrompted(true)
+                                showPinningDialog = false
+                                context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+                            }
+                        ) {
+                            Text("Open Security Settings")
+                        }
+                    },
+dismissButton = {
+                        TextButton(onClick = { showPinningDialog = false }) {
+                            Text("Cancel")
+                        }
+                    },
+                )
+            }
         }
     }
 }

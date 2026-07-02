@@ -31,6 +31,7 @@ import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -234,6 +235,11 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
                     Log.i("AlarmActivity", "Lock task succeeded on retry")
                 } catch (e2: Exception) {
                     Log.e("AlarmActivity", "Lock task failed — ensure Settings > Security > Screen Pinning is enabled.", e2)
+                    Toast.makeText(
+                        this,
+                        "Screen Pinning not enabled. Go to Settings > Security > Screen Pinning.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }, 750)
         }
