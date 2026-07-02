@@ -41,3 +41,4 @@ fastlane_key.json
 # Build artifacts in root
 /luxAlarmMod*.apk
 /app/release/
+/app/keystore.properties
