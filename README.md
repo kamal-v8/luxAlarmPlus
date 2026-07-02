@@ -1,12 +1,5 @@
 # Lux Alarm
 
-![F-Droid Version](https://img.shields.io/f-droid/v/com.dsalmun.luxalarm)
-![Downloads last month](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fkitswas%2Ffdroid-metrics-dashboard%2Fraw%2Frefs%2Fheads%2Fmain%2Fprocessed%2Fmonthly%2Fcom.dsalmun.luxalarm.json&query=%24.total_downloads&logo=fdroid&label=Downloads%20last%20month)
-
-[<img src="https://f-droid.org/badge/get-it-on.png"
-    alt="Get it on F-Droid"
-    height="80">](https://f-droid.org/packages/com.dsalmun.luxalarm)
-
 **Lux Alarm** is a light-sensitive alarm clock designed to ensure you get out of bed. The alarm remains active until it detects a specific level of ambient light in your room.
 
 ## How It Works
@@ -23,29 +16,29 @@ To disable the alarm, you must increase the room's brightness, either by opening
 
 ## Installation
 
-### F-Droid (Recommended)
+### Obtainium (Recommended)
 
-The app is available on [F-Droid](https://f-droid.org/packages/com.dsalmun.luxalarm), which provides automatic updates and verified builds.
+The easiest way to install and keep Lux Alarm automatically updated.
 
-### Obtainium
+[<img src="https://obtainium.imranr.dev/badge_obtainium.png"
+    alt="Get it on Obtainium"
+    height="80">](https://obtainium.imranr.dev/add.html?url=https://github.com/kamal-v8/LuxAlarm)
 
-You can add this repository directly to [Obtainium](https://obtainium.imranr.dev/) for easy updates:
-
-1. Open Obtainium
-2. Tap **Add App**
-3. Enter the app source URL: `https://github.com/YOUR_USERNAME/LuxAlarm`
-4. Obtainium will automatically detect releases and offer updates
-5. Tap **Add** and the app will be tracked for updates
+Or add manually in Obtainium:
+1. Open Obtainium → **Add App**
+2. Enter the app source URL: `https://github.com/kamal-v8/LuxAlarm`
+3. Obtainium will automatically detect releases and offer updates
+4. Tap **Add** and the app will be tracked for updates
 
 ### GitHub Releases
 
-Download the latest APK from the [Releases](../../releases) page. GitHub Actions automatically builds and uploads the APK on every tag push.
+Download the latest APK from the [Releases](../../releases) page.
 
 ## Building from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/LuxAlarm.git
+git clone https://github.com/kamal-v8/LuxAlarm.git
 cd LuxAlarm
 
 # Build debug APK
