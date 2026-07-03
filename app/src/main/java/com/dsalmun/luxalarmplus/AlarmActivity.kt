@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
 import android.app.KeyguardManager
 import android.content.Intent
@@ -49,7 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.dsalmun.luxalarm.ui.theme.LuxAlarmTheme
+import com.dsalmun.luxalarmplus.ui.theme.LuxAlarmTheme
 import java.text.SimpleDateFormat
 import java.util.*
 

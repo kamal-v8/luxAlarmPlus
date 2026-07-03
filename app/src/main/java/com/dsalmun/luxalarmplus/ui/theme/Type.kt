@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm.ui.theme
+package com.dsalmun.luxalarmplus.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

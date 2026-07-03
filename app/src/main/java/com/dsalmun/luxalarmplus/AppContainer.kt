@@ -14,27 +14,28 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
+import android.app.Application
+import com.dsalmun.luxalarmplus.data.AlarmDatabase
+import com.dsalmun.luxalarmplus.data.AlarmRepository
+import com.dsalmun.luxalarmplus.data.IAlarmRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+class AppContainer : Application() {
+    companion object {
+        lateinit var database: AlarmDatabase
+        lateinit var repository: IAlarmRepository
+        lateinit var settingsManager: SettingsManager
+    }
 
-        val pendingResult = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                AppContainer.repository.clearRingingAlarm()
-                AppContainer.repository.scheduleNextAlarm()
-            } finally {
-                pendingResult.finish()
-            }
-        }
+    override fun onCreate() {
+        super.onCreate()
+        database = AlarmDatabase.getDatabase(this)
+        repository = AlarmRepository(database.alarmDao(), this)
+        settingsManager = SettingsManager(this)
+        CoroutineScope(Dispatchers.IO).launch { repository.cancelV1Alarms() }
     }
 }

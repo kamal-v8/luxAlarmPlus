@@ -1,6 +1,6 @@
-# Lux Alarm
+# luxAlarm+
 
-**Lux Alarm** is a light-sensitive alarm clock designed to ensure you get out of bed. The alarm remains active until it detects a specific level of ambient light in your room.
+**luxAlarm+** is a light-sensitive alarm clock designed to ensure you get out of bed. The alarm remains active until it detects a specific level of ambient light in your room.
 
 ## How It Works
 
@@ -18,15 +18,15 @@ To disable the alarm, you must increase the room's brightness, either by opening
 
 ### Obtainium (Recommended)
 
-The easiest way to install and keep Lux Alarm automatically updated.
+The easiest way to install and keep luxAlarm+ automatically updated.
 
 [<img src="https://obtainium.imranr.dev/badge_obtainium.png"
     alt="Get it on Obtainium"
-    height="80">](https://obtainium.imranr.dev/add.html?url=https://github.com/kamal-v8/LuxAlarm)
+    height="80">](https://obtainium.imranr.dev/add.html?url=https://github.com/kamal-v8/LuxAlarm+)
 
 Or add manually in Obtainium:
 1. Open Obtainium → **Add App**
-2. Enter the app source URL: `https://github.com/kamal-v8/LuxAlarm`
+2. Enter the app source URL: `https://github.com/kamal-v8/LuxAlarm+`
 3. Obtainium will automatically detect releases and offer updates
 4. Tap **Add** and the app will be tracked for updates
 
@@ -38,8 +38,8 @@ Download the latest APK from the [Releases](../../releases) page.
 
 ```bash
 # Clone the repository
-git clone https://github.com/kamal-v8/LuxAlarm.git
-cd LuxAlarm
+git clone https://github.com/kamal-v8/LuxAlarm+.git
+cd LuxAlarm+
 
 # Build debug APK
 ./gradlew assembleDebug

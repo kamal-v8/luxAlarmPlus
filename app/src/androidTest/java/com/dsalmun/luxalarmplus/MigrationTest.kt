@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
 import android.content.ContentValues
 import android.content.Context
@@ -22,10 +22,10 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.filters.MediumTest
-import com.dsalmun.luxalarm.data.AlarmDatabase
-import com.dsalmun.luxalarm.data.AlarmDatabase.Companion.MIGRATION_1_2
-import com.dsalmun.luxalarm.data.AlarmDatabase.Companion.MIGRATION_2_3
-import com.dsalmun.luxalarm.data.AlarmItem
+import com.dsalmun.luxalarmplus.data.AlarmDatabase
+import com.dsalmun.luxalarmplus.data.AlarmDatabase.Companion.MIGRATION_1_2
+import com.dsalmun.luxalarmplus.data.AlarmDatabase.Companion.MIGRATION_2_3
+import com.dsalmun.luxalarmplus.data.AlarmItem
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlinx.coroutines.flow.first

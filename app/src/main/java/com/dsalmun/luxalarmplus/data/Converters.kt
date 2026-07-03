@@ -14,21 +14,18 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm.data
+package com.dsalmun.luxalarmplus.data
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.TypeConverters
+import androidx.room.TypeConverter
 
-@Entity(tableName = "alarms")
-@TypeConverters(Converters::class)
-data class AlarmItem(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val hour: Int,
-    val minute: Int,
-    val isActive: Boolean = true,
-    val repeatDays: Set<Int> = emptySet(),
-    val ringtoneUri: String? = null,
-    val volume: Float? = null,
-    val vibrationEnabled: Boolean = true,
-)
+class Converters {
+    @TypeConverter fun fromIntSet(value: Set<Int>): String = value.joinToString(separator = ",")
+
+    @TypeConverter
+    fun toIntSet(value: String): Set<Int> =
+        if (value.isEmpty()) {
+            emptySet()
+        } else {
+            value.split(',').map { it.toInt() }.toSet()
+        }
+}

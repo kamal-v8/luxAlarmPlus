@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Lux Alarm"
+rootProject.name = "luxAlarm+"
 include(":app")
  

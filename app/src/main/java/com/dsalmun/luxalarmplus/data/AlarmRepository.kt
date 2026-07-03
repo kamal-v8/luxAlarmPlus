@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm.data
+package com.dsalmun.luxalarmplus.data
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -22,8 +22,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.content.edit
-import com.dsalmun.luxalarm.AlarmReceiver
-import com.dsalmun.luxalarm.MainActivity
+import com.dsalmun.luxalarmplus.AlarmReceiver
+import com.dsalmun.luxalarmplus.MainActivity
 import java.util.Calendar
 import kotlinx.coroutines.flow.Flow
 

@@ -14,18 +14,14 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm.data
+package com.dsalmun.luxalarmplus.ui.theme
 
-import androidx.room.TypeConverter
+import androidx.compose.ui.graphics.Color
 
-class Converters {
-    @TypeConverter fun fromIntSet(value: Set<Int>): String = value.joinToString(separator = ",")
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
 
-    @TypeConverter
-    fun toIntSet(value: String): Set<Int> =
-        if (value.isEmpty()) {
-            emptySet()
-        } else {
-            value.split(',').map { it.toInt() }.toSet()
-        }
-}
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)

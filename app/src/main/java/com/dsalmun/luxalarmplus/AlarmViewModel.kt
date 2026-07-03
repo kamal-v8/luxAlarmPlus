@@ -14,13 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.dsalmun.luxalarm.data.AlarmItem
-import com.dsalmun.luxalarm.data.IAlarmRepository
+import com.dsalmun.luxalarmplus.data.AlarmItem
+import com.dsalmun.luxalarmplus.data.IAlarmRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

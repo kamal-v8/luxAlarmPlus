@@ -14,10 +14,10 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
-import com.dsalmun.luxalarm.data.AlarmItem
-import com.dsalmun.luxalarm.data.IAlarmRepository
+import com.dsalmun.luxalarmplus.data.AlarmItem
+import com.dsalmun.luxalarmplus.data.IAlarmRepository
 import kotlin.test.assertEquals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm.data
+package com.dsalmun.luxalarmplus.data
 
 import androidx.room.Dao
 import androidx.room.Delete

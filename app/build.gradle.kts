@@ -23,15 +23,15 @@ kotlin {
 }
 
 android {
-    namespace = "com.dsalmun.luxalarm"
+    namespace = "com.dsalmun.luxalarmplus"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dsalmun.luxalarm"
+        applicationId = "com.dsalmun.luxalarmplus"
         minSdk = 28
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.3.4"
+        versionCode = 16
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

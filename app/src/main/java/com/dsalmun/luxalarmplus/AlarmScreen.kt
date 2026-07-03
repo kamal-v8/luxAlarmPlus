@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
 import android.app.Activity
 import android.content.Context
@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dsalmun.luxalarm.data.AlarmItem
+import com.dsalmun.luxalarmplus.data.AlarmItem
 import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.flow.collectLatest

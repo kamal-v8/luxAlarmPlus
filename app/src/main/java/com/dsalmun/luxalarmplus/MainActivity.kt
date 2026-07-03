@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.dsalmun.luxalarm
+package com.dsalmun.luxalarmplus
 
 import android.Manifest
 import android.app.NotificationManager
@@ -31,7 +31,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import com.dsalmun.luxalarm.ui.theme.LuxAlarmTheme
+import com.dsalmun.luxalarmplus.ui.theme.LuxAlarmTheme
 
 class MainActivity : ComponentActivity() {
     private val requestNotificationPermissionLauncher =
