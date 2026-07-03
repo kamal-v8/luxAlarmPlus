@@ -16,6 +16,7 @@
  */
 package com.dsalmun.luxalarm
 
+import android.app.KeyguardManager
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -23,6 +24,9 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -102,6 +106,7 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
             }
         }
         setupFullscreen()
+        setupPinning()
     }
 
     private fun setupLightSensor() {
@@ -174,13 +179,35 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         window.attributes = layoutParams
     }
 
-    // ─── Screen Pinning (self-re-launch) ────────────────────────────────
+    // ─── Screen Pinning (self-re-launch + keyguard dismissal) ────────────
 
     /**
-     * Called when the user presses the Home button. If pinning is enabled
-     * and the alarm hasn't been dismissed yet, re-launch this activity
-     * so it comes right back.
+     * Dismiss the keyguard so the activity shows over the lock screen.
+     * On Android 12+ this is required for the activity to appear on top
+     * of a PIN/pattern protected lock screen when the alarm fires.
      */
+    private fun setupPinning() {
+        if (!lockScreenPinEnabled) return
+
+        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            keyguardManager.requestDismissKeyguard(this, null)
+        }
+
+        // Periodic safety net: re-show if hidden for any reason (Android 12 gesture nav, etc.)
+        val handler = Handler(Looper.getMainLooper())
+        val runner = object : Runnable {
+            override fun run() {
+                if (!alarmDismissed && AlarmService.isRunning) {
+                    relaunchSelf()
+                }
+                handler.postDelayed(this, 2000)
+            }
+        }
+        handler.postDelayed(runner, 2000)
+    }
+
+    /** Called when the user presses the Home button. Re-launch if alarm still ringing. */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
@@ -188,10 +215,7 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
-    /**
-     * Called when the activity is no longer visible (e.g. swiped from Recents).
-     * Re-launch if the alarm is still ringing and hasn't been legitimately dismissed.
-     */
+    /** Called when the activity is no longer visible (e.g. swiped from Recents). */
     override fun onStop() {
         super.onStop()
         if (lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
