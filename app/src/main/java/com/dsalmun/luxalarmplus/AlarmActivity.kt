@@ -1,31 +1,44 @@
 /*
- * This file is part of Lux Alarm, authored by Daniel Salmun.
+ * This file is part of luxAlarm+, authored by Daniel Salmun.
  *
- * Lux Alarm is free software: you can redistribute it and/or modify
+ * luxAlarm+ is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Lux Alarm is distributed in the hope that it will be useful,
+ * luxAlarm+ is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
+ * along with luxAlarm+.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.dsalmun.luxalarmplus
 
 import android.app.KeyguardManager
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -49,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.dsalmun.luxalarmplus.ui.theme.LuxAlarmTheme
 import java.text.SimpleDateFormat
 import java.util.*
@@ -71,14 +85,38 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
     private var lockScreenPinEnabled by mutableStateOf(SettingsManager.DEFAULT_LOCK_SCREEN_PIN)
     private var alarmDismissed = false
 
+    // Alarm audio + vibration (owned by the activity, not a service)
+    private var mediaPlayer: MediaPlayer? = null
+    private var vibrator: Vibrator? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var ringtoneUri: String? = null
+    private var volume: Float? = null
+    private var vibrationEnabled: Boolean = true
+
     // Aggressive periodic relaunch handler - runs every 300ms to reclaim screen from system UI
     private val relaunchHandler = Handler(Looper.getMainLooper())
     private val relaunchRunnable = object : Runnable {
         override fun run() {
-            if (!alarmDismissed && AlarmService.isRunning && lockScreenPinEnabled) {
+            if (!alarmDismissed && lockScreenPinEnabled) {
                 forceRelaunch()
             }
             relaunchHandler.postDelayed(this, 300)
+        }
+    }
+
+    // Re-hides system bars the moment they become visible, closing the "swipe down twice" trick.
+    private val insetsListener = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        rehideSystemBars()
+    }
+
+    private fun rehideSystemBars() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.let { controller ->
+                controller.systemBarsBehavior =
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            }
         }
     }
 
@@ -95,6 +133,9 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         )
 
         alarmId = intent.getIntExtra("alarm_id", -1)
+        ringtoneUri = intent.getStringExtra("ringtone_uri")
+        volume = if (intent.hasExtra("volume")) intent.getFloatExtra("volume", 1.0f) else null
+        vibrationEnabled = intent.getBooleanExtra("vibration_enabled", true)
         val settings = AppContainer.settingsManager
         requiredLightLevel = settings.getRequiredLuxLevel()
         luxHoldTimerEnabled = settings.getLuxHoldTimerEnabled()
@@ -103,6 +144,8 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
 
         setupScreenWake()
         setupLightSensor()
+        startAlarmSound()
+        startVibration()
 
         setContent {
             LuxAlarmTheme {
@@ -117,6 +160,9 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
             }
         }
         setupFullscreen()
+        // Start the periodic handler regardless of pinning setting — it also
+        // serves as a watchdog to reclaim focus from system UI.
+        relaunchHandler.post(relaunchRunnable)
         setupPinning()
     }
 
@@ -125,16 +171,110 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
     }
 
+    private fun startAlarmSound() {
+        try {
+            val audioAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
+
+            // Request audio focus to prevent system from stopping/ducking our alarm
+            audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(audioAttrs)
+                .build()
+            audioManager?.requestAudioFocus(audioFocusRequest!!)
+
+            val defaultAlarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            val selectedAlarmUri = ringtoneUri?.toUri()
+            mediaPlayer = createPlayerForUri(selectedAlarmUri, audioAttrs, volume)
+                ?: createPlayerForUri(defaultAlarmUri, audioAttrs, volume)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to start alarm sound", e)
+        }
+    }
+
+    private fun createPlayerForUri(
+        uri: Uri?,
+        audioAttrs: AudioAttributes,
+        vol: Float? = null,
+    ): MediaPlayer? {
+        if (uri == null) return null
+        var player: MediaPlayer? = null
+        return try {
+            MediaPlayer().apply {
+                player = this
+                setDataSource(applicationContext, uri)
+                setAudioAttributes(audioAttrs)
+                setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
+                isLooping = true
+                prepare()
+                if (vol != null) setVolume(vol, vol)
+                start()
+            }
+        } catch (e: Exception) {
+            Log.w("AlarmActivity", "Failed to play ringtone URI: $uri", e)
+            player?.release()
+            null
+        }
+    }
+
+    private fun startVibration() {
+        if (!vibrationEnabled) return
+        try {
+            vibrator =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager =
+                        getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                    vibratorManager.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    getSystemService(VIBRATOR_SERVICE) as Vibrator
+                }
+
+            val vibrationPattern = longArrayOf(0, 1000, 500, 1000, 500)
+            val vibrationEffect = VibrationEffect.createWaveform(vibrationPattern, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val vibrationAttrs = VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_ALARM)
+                    .build()
+                vibrator?.vibrate(vibrationEffect, vibrationAttrs)
+            } else {
+                val audioAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(vibrationEffect, audioAttrs)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to start vibration", e)
+        }
+    }
+
+    private fun releaseAlarmResources() {
+        mediaPlayer?.apply {
+            if (isPlaying) stop()
+            release()
+        }
+        mediaPlayer = null
+
+        vibrator?.cancel()
+        vibrator = null
+
+        audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+        audioFocusRequest = null
+        audioManager = null
+    }
+
     override fun onResume() {
         super.onResume()
         lightSensor?.let { sensor ->
             sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
         }
+        // Re-apply immersive mode and listen for bar reappearances.
+        rehideSystemBars()
+        window.decorView.addOnLayoutChangeListener(insetsListener)
     }
 
     override fun onPause() {
         super.onPause()
         sensorManager.unregisterListener(this)
+        window.decorView.removeOnLayoutChangeListener(insetsListener)
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -176,7 +316,11 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.decorView.post {
                 window.insetsController?.let { controller ->
-                    // Hide status and navigation bars to maximize visible area
+                    // Sticky immersive mode: swiping shows bars briefly, then they auto-hide.
+                    // This prevents the notification shade from being pulled fully open.
+                    controller.systemBarsBehavior =
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    // Hide status + navigation bars to maximize visible area
                     controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
                 }
             }
@@ -208,17 +352,15 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         } catch (e: Exception) {
             // Ignore if keyguard dismiss fails - relaunch handler will keep us on top
         }
-
-        // Start the aggressive periodic relaunch handler (300ms interval)
-        // This continuously reclaims the screen from any system UI (notification shade, etc.)
-        relaunchHandler.post(relaunchRunnable)
+        // Note: the periodic relaunch handler is started in onCreate regardless
+        // of the pinning setting, so it also acts as a watchdog to reclaim focus.
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         // If we lose focus (e.g., notification shade pulled down) and alarm is still ringing,
         // immediately relaunch to regain focus
-        if (!hasFocus && lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
+        if (!hasFocus && lockScreenPinEnabled && !alarmDismissed) {
             forceRelaunch()
         }
     }
@@ -226,7 +368,7 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
     /** Called when the user presses the Home button. Re-launch if alarm still ringing. */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
+        if (lockScreenPinEnabled && !alarmDismissed) {
             forceRelaunch()
         }
     }
@@ -234,7 +376,7 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
     /** Called when the activity is no longer visible (e.g. swiped from Recents). */
     override fun onStop() {
         super.onStop()
-        if (lockScreenPinEnabled && !alarmDismissed && AlarmService.isRunning) {
+        if (lockScreenPinEnabled && !alarmDismissed) {
             forceRelaunch()
         }
     }
@@ -251,16 +393,27 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             putExtra("alarm_id", alarmId)
+            ringtoneUri?.let { putExtra("ringtone_uri", it) }
+            volume?.let { putExtra("volume", it) }
+            putExtra("vibration_enabled", vibrationEnabled)
         }
         try {
             startActivity(intent)
         } catch (e: Exception) {
             // If reorder fails (rare), try without it
+            Log.w(TAG, "Relaunch with REORDER_TO_FRONT failed, trying fallback", e)
             val fallbackIntent = Intent(this, AlarmActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("alarm_id", alarmId)
+                ringtoneUri?.let { putExtra("ringtone_uri", it) }
+                volume?.let { putExtra("volume", it) }
+                putExtra("vibration_enabled", vibrationEnabled)
             }
-            startActivity(fallbackIntent)
+            try {
+                startActivity(fallbackIntent)
+            } catch (e2: Exception) {
+                Log.w(TAG, "Fallback relaunch also failed", e2)
+            }
         }
     }
 
@@ -269,13 +422,20 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         alarmDismissed = true
         // Stop the periodic relaunch handler to prevent memory leaks
         relaunchHandler.removeCallbacks(relaunchRunnable)
-        val stopIntent =
-            Intent(this, AlarmService::class.java).apply {
-                action = AlarmService.ACTION_STOP_ALARM
-                putExtra("alarm_id", alarmId)
-            }
-        startService(stopIntent)
+        // Release audio and vibration resources
+        releaseAlarmResources()
+        // Cancel the alarm notification
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(AlarmReceiver.ALARM_NOTIFICATION_ID)
+        // Clear ringing state
+        AppContainer.repository.clearRingingAlarm()
+        AppContainer.repository.clearRingingAlarmState()
         finish()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        releaseAlarmResources()
     }
 
     companion object {

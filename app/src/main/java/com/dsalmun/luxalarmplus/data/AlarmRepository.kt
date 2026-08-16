@@ -1,18 +1,18 @@
 /*
- * This file is part of Lux Alarm, authored by Daniel Salmun.
+ * This file is part of luxAlarm+, authored by Daniel Salmun.
  *
- * Lux Alarm is free software: you can redistribute it and/or modify
+ * luxAlarm+ is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Lux Alarm is distributed in the hope that it will be useful,
+ * luxAlarm+ is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
+ * along with luxAlarm+.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.dsalmun.luxalarmplus.data
 
@@ -37,6 +37,7 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val stateStore = AlarmStateStore(context)
 
     override fun getAllAlarms(): Flow<List<AlarmItem>> = alarmDao.getAllAlarms()
 
@@ -181,6 +182,18 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
 
     override fun clearRingingAlarm() {
         prefs.edit { putBoolean(KEY_IS_RINGING, false) }
+    }
+
+    override fun saveRingingAlarmState(state: RingingAlarmState) {
+        stateStore.save(state)
+    }
+
+    override fun loadRingingAlarmState(): RingingAlarmState? {
+        return stateStore.load()
+    }
+
+    override fun clearRingingAlarmState() {
+        stateStore.clear()
     }
 
     override suspend fun deactivateOneShotAlarms(ids: List<Int>) {

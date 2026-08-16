@@ -1,18 +1,18 @@
 /*
- * This file is part of Lux Alarm, authored by Daniel Salmun.
+ * This file is part of luxAlarm+, authored by Daniel Salmun.
  *
- * Lux Alarm is free software: you can redistribute it and/or modify
+ * luxAlarm+ is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Lux Alarm is distributed in the hope that it will be useful,
+ * luxAlarm+ is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
+ * along with luxAlarm+.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.dsalmun.luxalarmplus
 
@@ -51,11 +51,19 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (AppContainer.repository.isAlarmRinging()) {
-            if (AlarmService.isRunning) {
-                val intent =
-                    Intent(this, AlarmActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
+            // Re-launch AlarmActivity to resume the ringing alarm.
+            // The notification's full-screen intent may have been dismissed or
+            // the activity killed (e.g. swipe from recents). Re-posting the
+            // notification re-launches AlarmActivity with the persisted state.
+            val state = AppContainer.repository.loadRingingAlarmState()
+            if (state != null) {
+                val intent = Intent(this, AlarmActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("alarm_id", state.alarmId)
+                    state.ringtoneUri?.let { putExtra("ringtone_uri", it) }
+                    state.volume?.let { putExtra("volume", it) }
+                    putExtra("vibration_enabled", state.vibrationEnabled)
+                }
                 startActivity(intent)
             } else {
                 AppContainer.repository.clearRingingAlarm()

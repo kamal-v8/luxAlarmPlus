@@ -1,18 +1,18 @@
 /*
- * This file is part of Lux Alarm, authored by Daniel Salmun.
+ * This file is part of luxAlarm+, authored by Daniel Salmun.
  *
- * Lux Alarm is free software: you can redistribute it and/or modify
+ * luxAlarm+ is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Lux Alarm is distributed in the hope that it will be useful,
+ * luxAlarm+ is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
+ * along with luxAlarm+.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.dsalmun.luxalarmplus
 
@@ -136,8 +136,33 @@ fun AlarmScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text("Lux Alarm") },
+                title = { Text("luxAlarm+") },
                 actions = {
+                    IconButton(onClick = {
+                        // Mock alarm: trigger AlarmActivity immediately with current settings
+                        if (AppContainer.repository.setRingingAlarm()) {
+                            AppContainer.repository.saveRingingAlarmState(
+                                com.dsalmun.luxalarmplus.data.RingingAlarmState(
+                                    alarmId = -1,
+                                    ringtoneUri = null,
+                                    volume = null,
+                                    vibrationEnabled = true,
+                                )
+                            )
+                            AlarmReceiver.postAlarmNotification(
+                                context = context,
+                                alarmId = -1,
+                                ringtoneUri = null,
+                                volume = null,
+                                vibrationEnabled = true,
+                            )
+                        }
+                    }) {
+                        Icon(
+                            painter = painterResource(R.drawable.notifications_active_24px),
+                            contentDescription = "Test Alarm",
+                        )
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(
                             painter = painterResource(R.drawable.settings_24px),

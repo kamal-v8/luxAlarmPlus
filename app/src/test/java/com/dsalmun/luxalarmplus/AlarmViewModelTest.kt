@@ -1,23 +1,24 @@
 /*
- * This file is part of Lux Alarm, authored by Daniel Salmun.
+ * This file is part of luxAlarm+, authored by Daniel Salmun.
  *
- * Lux Alarm is free software: you can redistribute it and/or modify
+ * luxAlarm+ is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Lux Alarm is distributed in the hope that it will be useful,
+ * luxAlarm+ is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Lux Alarm.  If not, see <https://www.gnu.org/licenses/>.
+ * along with luxAlarm+.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.dsalmun.luxalarmplus
 
 import com.dsalmun.luxalarmplus.data.AlarmItem
 import com.dsalmun.luxalarmplus.data.IAlarmRepository
+import com.dsalmun.luxalarmplus.data.RingingAlarmState
 import kotlin.test.assertEquals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -254,6 +255,12 @@ class FakeAlarmRepository : IAlarmRepository {
     override fun setRingingAlarm(): Boolean = true
 
     override fun clearRingingAlarm() {}
+
+    override fun saveRingingAlarmState(state: RingingAlarmState) {}
+
+    override fun loadRingingAlarmState(): RingingAlarmState? = null
+
+    override fun clearRingingAlarmState() {}
 
     override suspend fun deactivateOneShotAlarms(ids: List<Int>) {}
 
