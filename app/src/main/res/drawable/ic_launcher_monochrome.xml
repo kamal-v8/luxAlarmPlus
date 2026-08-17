@@ -4,15 +4,13 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Monochrome alarm clock silhouette for Material You themed icons -->
+    <!-- Android applies the system wallpaper-derived color at runtime -->
+
     <!-- Alarm clock body (circle) -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M54,38m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0" />
-
-    <!-- Clock inner background (creates ring effect) -->
-    <path
-        android:fillColor="#6366F1"
-        android:pathData="M54,38m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
 
     <!-- Clock hands -->
     <path
@@ -35,7 +33,7 @@
         android:fillColor="#FFFFFF"
         android:pathData="M70,22L76,16A4,4 0,0 0,70,16Z" />
 
-    <!-- Bell hammers (small stems connecting bells to body) -->
+    <!-- Bell stems -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M36,24L40,20L42,22L38,26Z" />
@@ -51,12 +49,12 @@
         android:fillColor="#FFFFFF"
         android:pathData="M66,62L70,68L67,68L64,63Z" />
 
-    <!-- '+' badge circle (top-right, outside clock body) -->
+    <!-- '+' badge circle (top-right) -->
     <path
-        android:fillColor="#10B981"
+        android:fillColor="#FFFFFF"
         android:pathData="M76,22m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" />
 
-    <!-- '+' sign (white cross inside green badge) -->
+    <!-- '+' sign (cutout style — uses the badge circle as background) -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M74,17L78,17L78,27L74,27Z" />
