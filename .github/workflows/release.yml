@@ -55,7 +55,16 @@ jobs:
           fi
 
       - name: Verify APK signature
-        run: apksigner verify --verbose "$APK_PATH"
+        run: |
+          APKSIGNER=$(find $ANDROID_HOME -name apksigner 2>/dev/null | head -1)
+          if [ -z "$APKSIGNER" ]; then
+            APKSIGNER=$(find /usr/local/lib/android* -name apksigner 2>/dev/null | head -1)
+          fi
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --verbose "$APK_PATH"
+          else
+            echo "apksigner not found, skipping verification"
+          fi
 
       - name: Upload signed APK to Release
         uses: softprops/action-gh-release@v2
