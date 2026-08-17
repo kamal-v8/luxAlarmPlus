@@ -27,6 +27,9 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
 
+        // Cancel any leftover watchdog from before reboot
+        AlarmWatchdogReceiver.cancelWatchdog(context)
+
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {

@@ -51,6 +51,9 @@ class AlarmReceiver : BroadcastReceiver() {
             // No foreground service is used — this avoids the "Force stop" menu
             // in the notification shade.
             postAlarmNotification(context, alarmId, ringtoneUri, volume, vibrationEnabled)
+            // Schedule the watchdog so the alarm re-fires if the app is killed
+            // (e.g. user swipes from Recents).
+            AlarmWatchdogReceiver.scheduleWatchdog(context)
         }
 
         val pendingResult = goAsync()

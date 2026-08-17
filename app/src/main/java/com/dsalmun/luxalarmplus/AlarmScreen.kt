@@ -156,6 +156,7 @@ fun AlarmScreen(
                                 volume = null,
                                 vibrationEnabled = true,
                             )
+                            AlarmWatchdogReceiver.scheduleWatchdog(context)
                         }
                     }) {
                         Icon(

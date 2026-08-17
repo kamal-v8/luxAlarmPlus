@@ -427,6 +427,8 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         // Cancel the alarm notification
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(AlarmReceiver.ALARM_NOTIFICATION_ID)
+        // Cancel the watchdog — alarm is dismissed, no need to re-fire
+        AlarmWatchdogReceiver.cancelWatchdog(this)
         // Clear ringing state
         AppContainer.repository.clearRingingAlarm()
         AppContainer.repository.clearRingingAlarmState()
