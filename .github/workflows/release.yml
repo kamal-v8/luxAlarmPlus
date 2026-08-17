@@ -25,15 +25,39 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Release APK
+      - name: Decode keystore from secret
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/luxalarm.keystore
+          printf 'storeFile=luxalarm.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "${{ secrets.KEYSTORE_PASSWORD }}" \
+            "${{ secrets.KEY_ALIAS }}" \
+            "${{ secrets.KEY_PASSWORD }}" > app/keystore.properties
+
+      - name: Build signed Release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Collect APK path
+      - name: Sign APK (fallback if Gradle signing didn't apply)
+        if: success()
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          UNSIGNED=$(find app/build/outputs/apk/release -name "*unsigned*" -o -name "*.apk" | head -n 1)
+          if echo "$UNSIGNED" | grep -q "unsigned"; then
+            SIGNED="app/build/outputs/apk/release/app-release.apk"
+            apksigner sign \
+              --ks app/luxalarm.keystore \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              --out "$SIGNED" \
+              "$UNSIGNED"
+            echo "APK_PATH=$SIGNED" >> $GITHUB_ENV
+          else
+            echo "APK_PATH=$UNSIGNED" >> $GITHUB_ENV
+          fi
 
-      - name: Upload unsigned APK to Release
+      - name: Verify APK signature
+        run: apksigner verify --verbose "$APK_PATH"
+
+      - name: Upload signed APK to Release
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.APK_PATH }}
