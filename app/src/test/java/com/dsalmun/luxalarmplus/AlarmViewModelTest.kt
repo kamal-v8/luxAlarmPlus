@@ -248,6 +248,8 @@ class FakeAlarmRepository : IAlarmRepository {
 
     override suspend fun scheduleNextAlarm(): Boolean = shouldSucceed
 
+    override suspend fun rescheduleAfterBoot(): Boolean = shouldSucceed
+
     override fun canScheduleExactAlarms(): Boolean = true
 
     override fun isAlarmRinging(): Boolean = false

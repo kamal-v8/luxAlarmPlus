@@ -19,25 +19,55 @@ package com.dsalmun.luxalarmplus
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        val action = intent?.action ?: return
+        val isBoot =
+            action == Intent.ACTION_BOOT_COMPLETED || action == QUICKBOOT_POWERON
+        val isReschedule =
+            isBoot ||
+                action == Intent.ACTION_TIME_CHANGED ||
+                action == Intent.ACTION_TIMEZONE_CHANGED ||
+                action == Intent.ACTION_MY_PACKAGE_REPLACED
+
+        if (!isReschedule) return
 
         // Cancel any leftover watchdog from before reboot
-        AlarmWatchdogReceiver.cancelWatchdog(context)
+        try {
+            AlarmWatchdogReceiver.cancelWatchdog(context)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cancel watchdog on $action", e)
+        }
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 AppContainer.repository.clearRingingAlarm()
-                AppContainer.repository.scheduleNextAlarm()
+                AppContainer.repository.clearRingingAlarmState()
+                if (isBoot) {
+                    Log.i(TAG, "Boot detected ($action): rescheduling with missed-alarm retry")
+                    AppContainer.repository.rescheduleAfterBoot()
+                } else {
+                    Log.i(TAG, "System event ($action): re-scheduling next alarm")
+                    AppContainer.repository.scheduleNextAlarm()
+                }
+            } catch (e: Exception) {
+                // Direct-boot locked state: DB/prefs may be unavailable. Failure
+                // here just means BOOT_COMPLETED after unlock will retry.
+                Log.w(TAG, "Reschedule failed on $action", e)
             } finally {
                 pendingResult.finish()
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "BootReceiver"
+        private const val QUICKBOOT_POWERON = "android.intent.action.QUICKBOOT_POWERON"
     }
 }

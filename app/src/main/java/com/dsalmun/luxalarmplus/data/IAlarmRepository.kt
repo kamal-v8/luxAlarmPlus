@@ -39,7 +39,28 @@ interface IAlarmRepository {
 
     suspend fun scheduleNextAlarm(): Boolean
 
+    /**
+     * Re-schedules alarms after a reboot/power-off.
+     *
+     * All [AlarmManager] alarms are cleared on reboot, so this must be called
+     * from [com.dsalmun.luxalarmplus.BootReceiver]. Unlike [scheduleNextAlarm],
+     * it detects alarms that should have fired while the device was off and
+     * re-fires them [REBOOT_GRACE_DELAY_MS] after boot instead of silently
+     * pushing one-shots to tomorrow.
+     *
+     * Battery: schedules a single one-shot `setAlarmClock`, no polling.
+     */
+    suspend fun rescheduleAfterBoot(): Boolean
+
     fun canScheduleExactAlarms(): Boolean
+
+    companion object {
+        /** Delay after boot before a missed alarm rings, lets system settle. */
+        const val REBOOT_GRACE_DELAY_MS = 2 * 60 * 1000L
+
+        /** Repeating alarms missed longer ago than this just schedule next. */
+        const val MISSED_WINDOW_MS = 60 * 60 * 1000L
+    }
 
     fun isAlarmRinging(): Boolean
 

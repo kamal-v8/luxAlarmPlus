@@ -21,6 +21,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.content.edit
 import com.dsalmun.luxalarmplus.AlarmReceiver
 import com.dsalmun.luxalarmplus.MainActivity
@@ -30,7 +31,9 @@ import kotlinx.coroutines.flow.Flow
 class AlarmRepository(private val alarmDao: AlarmDao, private val context: Context) :
     IAlarmRepository {
     private companion object {
+        const val TAG = "AlarmRepository"
         const val NEXT_ALARM_REQUEST_CODE = 0
+        const val MISSED_ALARM_REQUEST_CODE = 1
         const val PREFS_NAME = "alarm_state"
         const val KEY_IS_RINGING = "is_ringing"
         const val KEY_V1_MIGRATED = "v1_migrated"
@@ -121,10 +124,12 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
 
         if (activeAlarms.isEmpty()) {
             cancelNextAlarm()
+            cancelMissedAlarm()
             return true
         }
 
         if (!canScheduleExactAlarms()) {
+            Log.w(TAG, "scheduleNextAlarm: cannot schedule exact alarms, permission missing")
             return false
         }
 
@@ -137,9 +142,66 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
 
         val nextAlarms =
             alarmTriggers.filter { it.second == minTriggerTime }.sortedBy { it.first.id }
-        val alarmIds = nextAlarms.map { it.first.id }
+        scheduleAlarmAt(minTriggerTime, nextAlarms.map { it.first }, NEXT_ALARM_REQUEST_CODE)
+        // A normal schedule supersedes any stale missed-alarm retry.
+        cancelMissedAlarm()
+        return true
+    }
+
+    override suspend fun rescheduleAfterBoot(): Boolean {
+        val activeAlarms = alarmDao.getActiveAlarms()
+
+        if (activeAlarms.isEmpty()) {
+            cancelNextAlarm()
+            cancelMissedAlarm()
+            return true
+        }
+
+        if (!canScheduleExactAlarms()) {
+            Log.w(TAG, "rescheduleAfterBoot: cannot schedule exact alarms, permission missing")
+            return false
+        }
+
+        val now = System.currentTimeMillis()
+        val missed = findMissedAlarms(activeAlarms, now)
+
+        if (missed.isEmpty()) {
+            Log.i(TAG, "rescheduleAfterBoot: no missed alarms, scheduling next")
+            return scheduleNextAlarm()
+        }
+
+        val sortedMissed = missed.sortedBy { it.id }
+        val retryAt = now + IAlarmRepository.REBOOT_GRACE_DELAY_MS
+        Log.i(
+            TAG,
+            "rescheduleAfterBoot: ${sortedMissed.size} missed alarm(s) " +
+                "${sortedMissed.map { it.id }}, retrying at $retryAt",
+        )
+        // Schedule the future alarm in the normal slot first, then the missed
+        // retry in its own slot. Separate request codes let both coexist, so a
+        // reboot doesn't lose alarms after the missed one. The retry fire
+        // chain-schedules via AlarmReceiver -> scheduleNextAlarm().
+        val alarmTriggers =
+            activeAlarms.map { alarm ->
+                alarm to calculateNextTrigger(alarm.hour, alarm.minute, alarm.repeatDays)
+            }
+        val minTriggerTime = alarmTriggers.minOf { it.second }
+        val nextAlarms =
+            alarmTriggers.filter { it.second == minTriggerTime }.sortedBy { it.first.id }
+        scheduleAlarmAt(minTriggerTime, nextAlarms.map { it.first }, NEXT_ALARM_REQUEST_CODE)
+        scheduleAlarmAt(retryAt, sortedMissed, MISSED_ALARM_REQUEST_CODE)
+        return true
+    }
+
+    private fun scheduleAlarmAt(
+        triggerAtMillis: Long,
+        alarmsInSlot: List<AlarmItem>,
+        requestCode: Int,
+    ) {
+        val sorted = alarmsInSlot.sortedBy { it.id }
+        val alarmIds = sorted.map { it.id }
         // When multiple alarms fire simultaneously, use ringtone from lowest-ID alarm
-        val nextAlarm = nextAlarms.first().first
+        val nextAlarm = sorted.first()
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent =
@@ -152,7 +214,7 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
         val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
-                NEXT_ALARM_REQUEST_CODE,
+                requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
@@ -165,11 +227,42 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         alarmManager.setAlarmClock(
-            AlarmManager.AlarmClockInfo(minTriggerTime, showIntent),
+            AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent),
             pendingIntent,
         )
-        return true
     }
+
+    /**
+     * Alarms that should have fired while the device was off.
+     *
+     * One-shot (empty [AlarmItem.repeatDays]) alarms stay active until they
+     * fire, so an active one-shot whose time today already passed definitely
+     * missed. Repeating alarms stay active after firing, so only treat today
+     * as missed when today is a repeat day and the time passed within
+     * [IAlarmRepository.MISSED_WINDOW_MS] — avoids re-ringing an alarm that
+     * already fired hours before the reboot.
+     */
+    private fun findMissedAlarms(activeAlarms: List<AlarmItem>, now: Long): List<AlarmItem> {
+        val todayDow = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+        return activeAlarms.filter { alarm ->
+            val todayTrigger = calculateTodayTrigger(alarm.hour, alarm.minute)
+            if (todayTrigger > now) return@filter false
+            if (alarm.repeatDays.isEmpty()) {
+                true
+            } else {
+                todayDow in alarm.repeatDays &&
+                    (now - todayTrigger) <= IAlarmRepository.MISSED_WINDOW_MS
+            }
+        }
+    }
+
+    private fun calculateTodayTrigger(hour: Int, minute: Int): Long =
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
 
     override fun isAlarmRinging(): Boolean = prefs.getBoolean(KEY_IS_RINGING, false)
 
@@ -226,12 +319,20 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
         }
 
     private fun cancelNextAlarm() {
+        cancelAlarmSlot(NEXT_ALARM_REQUEST_CODE)
+    }
+
+    private fun cancelMissedAlarm() {
+        cancelAlarmSlot(MISSED_ALARM_REQUEST_CODE)
+    }
+
+    private fun cancelAlarmSlot(requestCode: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, AlarmReceiver::class.java)
         val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
-                NEXT_ALARM_REQUEST_CODE,
+                requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
