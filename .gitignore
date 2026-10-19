@@ -42,3 +42,7 @@ fastlane_key.json
 /luxAlarmMod*.apk
 /app/release/
 /app/keystore.properties
+
+# Agent configuration
+.agents/
+skills-lock.json

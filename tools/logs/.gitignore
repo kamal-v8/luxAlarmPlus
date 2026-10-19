@@ -1,0 +1,3 @@
+# The harness writes its log files here (one directory per run).
+*
+!.gitignore

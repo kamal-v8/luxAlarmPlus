@@ -250,6 +250,10 @@ class FakeAlarmRepository : IAlarmRepository {
 
     override suspend fun rescheduleAfterBoot(): Boolean = shouldSucceed
 
+    override suspend fun syncAfterUnlock() {}
+
+    override fun isUserUnlocked(): Boolean = true
+
     override fun canScheduleExactAlarms(): Boolean = true
 
     override fun isAlarmRinging(): Boolean = false

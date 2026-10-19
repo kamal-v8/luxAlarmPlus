@@ -28,7 +28,13 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         val isBoot =
-            action == Intent.ACTION_BOOT_COMPLETED || action == QUICKBOOT_POWERON
+            action == Intent.ACTION_BOOT_COMPLETED ||
+                // Delivered to direct-boot-aware components while the device is
+                // still encrypted. BOOT_COMPLETED only arrives after the first
+                // unlock, so this is the broadcast that makes the alarm survive
+                // a reboot on a device that is never unlocked.
+                action == Intent.ACTION_LOCKED_BOOT_COMPLETED ||
+                action == QUICKBOOT_POWERON
         val isReschedule =
             isBoot ||
                 action == Intent.ACTION_TIME_CHANGED ||
@@ -47,10 +53,18 @@ class BootReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val locked = !AppContainer.repository.isUserUnlocked()
                 AppContainer.repository.clearRingingAlarm()
                 AppContainer.repository.clearRingingAlarmState()
                 if (isBoot) {
-                    Log.i(TAG, "Boot detected ($action): rescheduling with missed-alarm retry")
+                    if (locked) {
+                        Log.i(
+                            TAG,
+                            "Boot detected ($action): rescheduling from device-protected snapshot (locked)",
+                        )
+                    } else {
+                        Log.i(TAG, "Boot detected ($action): rescheduling with missed-alarm retry")
+                    }
                     AppContainer.repository.rescheduleAfterBoot()
                 } else {
                     Log.i(TAG, "System event ($action): re-scheduling next alarm")
@@ -58,7 +72,8 @@ class BootReceiver : BroadcastReceiver() {
                 }
             } catch (e: Exception) {
                 // Direct-boot locked state: DB/prefs may be unavailable. Failure
-                // here just means BOOT_COMPLETED after unlock will retry.
+                // here just means the next USER_UNLOCKED or BOOT_COMPLETED
+                // event retries.
                 Log.w(TAG, "Reschedule failed on $action", e)
             } finally {
                 pendingResult.finish()

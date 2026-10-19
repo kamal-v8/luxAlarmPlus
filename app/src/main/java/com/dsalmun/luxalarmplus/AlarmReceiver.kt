@@ -26,6 +26,7 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.dsalmun.luxalarmplus.data.RingingAlarmState
@@ -42,25 +43,51 @@ class AlarmReceiver : BroadcastReceiver() {
             if (intent?.hasExtra("volume") == true) intent.getFloatExtra("volume", 1.0f) else null
         val vibrationEnabled = intent?.getBooleanExtra("vibration_enabled", true) ?: true
 
-        if (AppContainer.repository.setRingingAlarm()) {
+        // The alarm may fire while the device is still locked, so nothing here
+        // may depend on credential-encrypted storage: the ringing flag and
+        // the ringing state both live in device-protected storage.
+        val isFirstRing = try {
+            AppContainer.repository.setRingingAlarm()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set the ringing flag", e)
+            false
+        }
+
+        if (isFirstRing) {
             // Persist ringing state so AlarmActivity can reconstruct if killed.
-            AppContainer.repository.saveRingingAlarmState(
-                RingingAlarmState(alarmId, ringtoneUri, volume, vibrationEnabled)
-            )
+            try {
+                AppContainer.repository.saveRingingAlarmState(
+                    RingingAlarmState(alarmId, ringtoneUri, volume, vibrationEnabled)
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save the ringing state", e)
+            }
             // Post a notification with a full-screen intent that launches AlarmActivity.
             // No foreground service is used — this avoids the "Force stop" menu
             // in the notification shade.
-            postAlarmNotification(context, alarmId, ringtoneUri, volume, vibrationEnabled)
+            try {
+                postAlarmNotification(context, alarmId, ringtoneUri, volume, vibrationEnabled)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to post the alarm notification", e)
+            }
             // Schedule the watchdog so the alarm re-fires if the app is killed
             // (e.g. user swipes from Recents).
-            AlarmWatchdogReceiver.scheduleWatchdog(context)
+            try {
+                AlarmWatchdogReceiver.scheduleWatchdog(context)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to schedule the watchdog", e)
+            }
         }
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // The repository defers the deactivation while the device is
+                // locked, and applies it on the next unlock.
                 AppContainer.repository.deactivateOneShotAlarms(alarmIds.toList())
                 AppContainer.repository.scheduleNextAlarm()
+            } catch (e: Exception) {
+                Log.w(TAG, "Post-alarm housekeeping failed", e)
             } finally {
                 pendingResult.finish()
             }
@@ -82,6 +109,7 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        private const val TAG = "AlarmReceiver"
         const val ALARM_CHANNEL_ID = "alarm_channel_id"
         const val ALARM_NOTIFICATION_ID = 1001
 

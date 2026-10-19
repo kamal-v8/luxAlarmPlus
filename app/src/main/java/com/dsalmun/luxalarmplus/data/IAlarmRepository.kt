@@ -48,9 +48,28 @@ interface IAlarmRepository {
      * re-fires them [REBOOT_GRACE_DELAY_MS] after boot instead of silently
      * pushing one-shots to tomorrow.
      *
+     * Works before the user has unlocked the device: the schedule is then
+     * taken from the device-protected snapshot instead of Room.
+     *
      * Battery: schedules a single one-shot `setAlarmClock`, no polling.
      */
     suspend fun rescheduleAfterBoot(): Boolean
+
+    /**
+     * Applies the work that could not be done while the device was locked
+     * (deactivating one-shot alarms that fired) and re-syncs the
+     * device-protected mirror of the schedule.
+     *
+     * Called when the user unlocks the device.
+     */
+    suspend fun syncAfterUnlock()
+
+    /**
+     * Whether the credential-encrypted storage is readable, i.e. whether the
+     * user has unlocked the device since boot. While it is not, the schedule
+     * is taken from the device-protected snapshot instead of Room.
+     */
+    fun isUserUnlocked(): Boolean
 
     fun canScheduleExactAlarms(): Boolean
 

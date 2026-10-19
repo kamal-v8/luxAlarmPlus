@@ -9,11 +9,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Android 14+: allows the alarm category to use a full screen intent. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_ALARM" />
 
     <application
         android:name=".AppContainer"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:directBootAware="true"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -33,14 +36,26 @@
         </activity>
         <receiver
             android:name=".AlarmReceiver"
+            android:directBootAware="true"
             android:exported="false" />
         <receiver
             android:name=".AlarmWatchdogReceiver"
+            android:directBootAware="true"
             android:exported="false" />
         <receiver
             android:name=".BootReceiver"
+            android:directBootAware="true"
             android:exported="false">
             <intent-filter>
+                <!--
+                    LOCKED_BOOT_COMPLETED is the broadcast that reaches
+                    direct-boot-aware components while the device is still
+                    encrypted, i.e. before the first unlock. BOOT_COMPLETED is
+                    only delivered after the user unlocks, so without this
+                    action the alarm would not be re-registered in time on a
+                    device that stays locked.
+                -->
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.TIME_SET" />
@@ -48,9 +63,28 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
-        
+        <!--
+            Delivered once the user unlocks the device, so the work that could
+            not be done in the locked (direct boot) state is applied.
+        -->
+        <receiver
+            android:name=".UserUnlockedReceiver"
+            android:directBootAware="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            The alarm may fire while the device is still locked, so the alarm
+            screen has to be direct boot aware: without it the full-screen
+            intent cannot be started before the first unlock and the alarm
+            would only be visible in the notification shade.
+        -->
         <activity
             android:name=".AlarmActivity"
+            android:directBootAware="true"
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"

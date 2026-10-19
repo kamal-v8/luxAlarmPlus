@@ -17,6 +17,8 @@
 package com.dsalmun.luxalarmplus
 
 import android.app.Application
+import android.content.Context
+import android.util.Log
 import com.dsalmun.luxalarmplus.data.AlarmDatabase
 import com.dsalmun.luxalarmplus.data.AlarmRepository
 import com.dsalmun.luxalarmplus.data.IAlarmRepository
@@ -26,16 +28,48 @@ import kotlinx.coroutines.launch
 
 class AppContainer : Application() {
     companion object {
-        lateinit var database: AlarmDatabase
+        private const val TAG = "AppContainer"
+
+        private lateinit var appContext: Context
+
         lateinit var repository: IAlarmRepository
         lateinit var settingsManager: SettingsManager
+
+        private var databaseInstance: AlarmDatabase? = null
+
+        /**
+         * The Room database lives in credential-encrypted storage, so it can
+         * only be opened once the user has unlocked the device. It is
+         * therefore created on first access instead of in [onCreate], which
+         * also runs in the locked (direct boot) state.
+         */
+        val database: AlarmDatabase
+            get() =
+                databaseInstance
+                    ?: synchronized(this) {
+                        databaseInstance
+                            ?: AlarmDatabase.getDatabase(appContext).also { databaseInstance = it }
+                    }
     }
 
     override fun onCreate() {
         super.onCreate()
-        database = AlarmDatabase.getDatabase(this)
-        repository = AlarmRepository(database.alarmDao(), this)
+        appContext = applicationContext
         settingsManager = SettingsManager(this)
-        CoroutineScope(Dispatchers.IO).launch { repository.cancelV1Alarms() }
+        // The DAO is resolved lazily: the repository falls back to the
+        // device-protected snapshot while the device is locked.
+        repository = AlarmRepository(this, daoProvider = { database.alarmDao() })
+
+        if (repository.isUserUnlocked()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    repository.cancelV1Alarms()
+                } catch (e: Exception) {
+                    Log.w(TAG, "cancelV1Alarms failed", e)
+                }
+            }
+        } else {
+            Log.i(TAG, "onCreate: device is locked, running in direct boot mode")
+        }
     }
 }

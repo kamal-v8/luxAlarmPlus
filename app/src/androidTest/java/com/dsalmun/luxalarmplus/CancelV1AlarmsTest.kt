@@ -35,6 +35,11 @@ import org.junit.Test
 
 @MediumTest
 class CancelV1AlarmsTest {
+    companion object {
+        /** The app runs its own v1 migration in the background, see awaitAppMigration. */
+        private var appMigrationObserved = false
+    }
+
     private lateinit var context: Context
     private lateinit var database: AlarmDatabase
     private lateinit var repository: AlarmRepository
@@ -48,8 +53,22 @@ class CancelV1AlarmsTest {
             Room.inMemoryDatabaseBuilder(context, AlarmDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
-        repository = AlarmRepository(database.alarmDao(), context)
+        repository = AlarmRepository(context, daoProvider = { database.alarmDao() })
+        // The app runs its own one-time v1 migration in the background and
+        // that writes the very same "v1_migrated" flag. Wait for it to be
+        // done, so clearing the flag below really resets the migration.
+        awaitAppMigration()
         context.getSharedPreferences("alarm_state", Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun awaitAppMigration() {
+        if (appMigrationObserved) return
+        val prefs = context.getSharedPreferences("alarm_state", Context.MODE_PRIVATE)
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!prefs.getBoolean("v1_migrated", false) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50)
+        }
+        appMigrationObserved = true
     }
 
     @After

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Monochrome layer for the adaptive launcher icon (Android 13+ themed icons).
+  A single flat-colour mirror of the full-colour artwork in
+  mipmap-xxxhdpi/ic_launcher_foreground.webp: a teal alarm clock (ring, twelve
+  hour ticks, two hands, hub, top stem, two bells, two splayed legs) with a rising
+  sun on its right.  The sun is a half disc whose flat bottom is the horizon and
+  whose four rays fan out to the upper right, and the sun paints over the clock
+  ring, so the ring is interrupted where the sun covers it.
+
+  The foreground raster is 432x432 for the 108x108 viewport (one artwork pixel =
+  0.25 viewport units) and the clock is NOT centred in that canvas: its centre sits
+  at artwork (215.5, 215.5) = viewport (53.875, 53.875).  The group below carries
+  the whole clock: it scales it by
+  S = (mean ring centreline radius 79.339/4) / 19.85 = 0.99923 and translates it by
+  (TX, TY) = (53.875 - 54, 53.875 - 54) = (-0.125, -0.125), so the themed clock
+  lands on exactly the same centre and at exactly the same radius as the colour
+  artwork (ring band 71.395..87.283 artwork px = 17.85..21.82 viewport units).
+  The sun and its rays sit deliberately outside that group and are given in
+  absolute viewport coordinates measured from the artwork, so they stay put.
+
+  The ring gap runs from 329.9 deg to 353.9 deg (screen angle, 0 = east, 90 = south):
+  that is the arc the sun's filled half disc covers, minus the ~2 deg that each end
+  is tucked further under the sun so that no stroke end cap can show.
+
+  The system tints this mask with the user's Material You colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- ==================== clock (placed by the group transform) ======== -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.99923"
+        android:scaleY="0.99923"
+        android:translateX="-0.125"
+        android:translateY="-0.125">
+
+        <!-- Clock face ticks: 12 of them, 30 deg apart, radius 62 artwork px.  The
+             12/3/6/9 ticks are long dashes, the other eight are short dots. -->
+        <path
+            android:pathData="M54,39L54,38"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.5" />
+        <path
+            android:pathData="M61.6875,40.6849L61.8125,40.4684"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M67.3151,46.3125L67.5316,46.1875"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M69,54L70,54"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.5" />
+        <path
+            android:pathData="M67.3151,61.6875L67.5316,61.8125"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M61.6875,67.3151L61.8125,67.5316"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M54,69L54,70"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.5" />
+        <path
+            android:pathData="M46.3125,67.3151L46.1875,67.5316"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M40.6849,61.6875L40.4684,61.8125"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M39,54L38,54"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.5" />
+        <path
+            android:pathData="M40.6849,46.3125L40.4684,46.1875"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+        <path
+            android:pathData="M46.3125,40.6849L46.1875,40.4684"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.6" />
+
+        <!-- Hands -->
+        <path
+            android:pathData="M54,55L54,42.5662"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="1.9" />
+        <path
+            android:pathData="M54,55L60.7906,58.4193"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="2.6" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,52.9a2.1,2.1 0 1,0 0,4.2a2.1,2.1 0 1,0 0,-4.2z" />
+
+        <!-- Clock body: the ring, open where the rising sun covers it -->
+        <path
+            android:pathData="M73.7376,51.8907A19.85,19.85 0 1 1 71.1733,44.045"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3.9781" />
+
+        <!-- Bells -->
+        <group
+            android:pivotX="40.7023"
+            android:pivotY="33.872"
+            android:rotation="-33.7">
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M32.2958,33.872A8.4065,8.4065 0 0,1 49.1087,33.872Z" />
+        </group>
+        <group
+            android:pivotX="65.8341"
+            android:pivotY="33.2466"
+            android:rotation="27.4">
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M57.4401,33.2466A8.3939,8.3939 0 0,1 74.228,33.2466Z" />
+        </group>
+
+        <!-- Top stem -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M50.9977,27.4796 h5.254 a0.7506,0.7506 0 0 1 0,1.5012 h-5.254 a0.7506,0.7506 0 0 1 0,-1.5012 z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M52.9992,28.9808 h1.7513 a0.8757,0.8757 0 0 1 0,3.3776 h-1.7513 a0.8757,0.8757 0 0 1 0,-3.3776 z" />
+
+        <!-- Legs -->
+        <path
+            android:pathData="M42.5162,70.2125L38.4881,76.2671"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="2.5019" />
+        <path
+            android:pathData="M65.5088,70.1874L69.8121,76.3422"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="2.5019" />
+    </group>
+
+    <!-- ==================== rising sun (absolute viewport coords) ========== -->
+    <!-- Half disc: circle centre (67.81, 51.515) r 10.4175 cut by the horizon at
+         y 52.5, exactly as in the colour artwork. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57.4392,52.5A10.4175,10.4175 0 1 1 78.1808,52.5Z" />
+
+    <!-- The four rays of the colour artwork (round capped strokes) -->
+    <path
+        android:pathData="M77.1375,42.4975L79.25,40.39"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.6" />
+    <path
+        android:pathData="M79.785,46.7525L82.7725,45.6575"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.6" />
+    <path
+        android:pathData="M80.7725,51.72L83.73,51.76"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.6" />
+    <path
+        android:pathData="M72.9775,39.885L73.79,39.165"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.25" />
+</vector>

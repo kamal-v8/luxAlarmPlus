@@ -38,13 +38,27 @@ import androidx.core.content.ContextCompat
  */
 class AlarmWatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (!AppContainer.repository.isAlarmRinging()) {
+        // The ringing state lives in device-protected storage, so this also
+        // works while the device is still locked.
+        val isRinging = try {
+            AppContainer.repository.isAlarmRinging()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read the ringing flag", e)
+            false
+        }
+        if (!isRinging) {
             // Alarm was dismissed — cancel the watchdog.
             cancelWatchdog(context)
             return
         }
 
-        val state = AppContainer.repository.loadRingingAlarmState()
+        val state =
+            try {
+                AppContainer.repository.loadRingingAlarmState()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read the ringing state", e)
+                null
+            }
         if (state == null) {
             cancelWatchdog(context)
             return

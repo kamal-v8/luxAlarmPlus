@@ -17,8 +17,6 @@
 package com.dsalmun.luxalarmplus.data
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.core.content.edit
 
 /**
  * Persists the currently-ringing alarm's reconstruction data so that [com.dsalmun.luxalarmplus.AlarmActivity]
@@ -27,40 +25,25 @@ import androidx.core.content.edit
  * Written when the alarm starts ringing, cleared when it is dismissed.
  * Read by [com.dsalmun.luxalarmplus.MainActivity] when it detects the alarm
  * should be ringing but AlarmActivity is not on screen.
+ *
+ * The data lives in device-protected storage (see [DeviceProtectedAlarmStore])
+ * so it is also readable while the device is still locked, which is exactly
+ * when an alarm may fire. This class is a thin adapter on top of that store,
+ * so there is a single place where the ringing state is kept.
  */
 class AlarmStateStore(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val store = DeviceProtectedAlarmStore(context)
 
     fun save(state: RingingAlarmState) {
-        prefs.edit {
-            putInt(KEY_ALARM_ID, state.alarmId)
-            putString(KEY_RINGTONE_URI, state.ringtoneUri)
-            if (state.volume != null) putFloat(KEY_VOLUME, state.volume) else remove(KEY_VOLUME)
-            putBoolean(KEY_VIBRATION_ENABLED, state.vibrationEnabled)
-        }
+        store.saveRingingState(state)
     }
 
     fun load(): RingingAlarmState? {
-        if (!prefs.contains(KEY_ALARM_ID)) return null
-        val alarmId = prefs.getInt(KEY_ALARM_ID, -1)
-        if (alarmId < 0) return null
-        val ringtoneUri = prefs.getString(KEY_RINGTONE_URI, null)
-        val volume = if (prefs.contains(KEY_VOLUME)) prefs.getFloat(KEY_VOLUME, 1f) else null
-        val vibrationEnabled = prefs.getBoolean(KEY_VIBRATION_ENABLED, true)
-        return RingingAlarmState(alarmId, ringtoneUri, volume, vibrationEnabled)
+        return store.loadRingingState()
     }
 
     fun clear() {
-        prefs.edit { clear() }
-    }
-
-    companion object {
-        private const val PREFS_NAME = "alarm_ringing_state"
-        private const val KEY_ALARM_ID = "alarm_id"
-        private const val KEY_RINGTONE_URI = "ringtone_uri"
-        private const val KEY_VOLUME = "volume"
-        private const val KEY_VIBRATION_ENABLED = "vibration_enabled"
+        store.clearRingingState()
     }
 }
 

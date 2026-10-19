@@ -136,11 +136,22 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         ringtoneUri = intent.getStringExtra("ringtone_uri")
         volume = if (intent.hasExtra("volume")) intent.getFloatExtra("volume", 1.0f) else null
         vibrationEnabled = intent.getBooleanExtra("vibration_enabled", true)
-        val settings = AppContainer.settingsManager
-        requiredLightLevel = settings.getRequiredLuxLevel()
-        luxHoldTimerEnabled = settings.getLuxHoldTimerEnabled()
-        luxHoldDurationSeconds = settings.getLuxHoldDurationSeconds()
-        lockScreenPinEnabled = settings.getLockScreenPinEnabled()
+        // The alarm may fire before the user has unlocked the device, so the
+        // settings are read from device-protected storage and every read is
+        // guarded: a failure must never crash the alarm screen.
+        val settings = try {
+            AppContainer.settingsManager
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read the settings", e)
+            null
+        }
+        requiredLightLevel = settings?.getRequiredLuxLevel() ?: SettingsManager.DEFAULT_LUX_LEVEL
+        luxHoldTimerEnabled =
+            settings?.getLuxHoldTimerEnabled() ?: SettingsManager.DEFAULT_LUX_HOLD_TIMER_ENABLED
+        luxHoldDurationSeconds =
+            settings?.getLuxHoldDurationSeconds() ?: SettingsManager.DEFAULT_LUX_HOLD_DURATION
+        lockScreenPinEnabled =
+            settings?.getLockScreenPinEnabled() ?: SettingsManager.DEFAULT_LOCK_SCREEN_PIN
 
         setupScreenWake()
         setupLightSensor()
@@ -430,8 +441,12 @@ class AlarmActivity : ComponentActivity(), SensorEventListener {
         // Cancel the watchdog — alarm is dismissed, no need to re-fire
         AlarmWatchdogReceiver.cancelWatchdog(this)
         // Clear ringing state
-        AppContainer.repository.clearRingingAlarm()
-        AppContainer.repository.clearRingingAlarmState()
+        try {
+            AppContainer.repository.clearRingingAlarm()
+            AppContainer.repository.clearRingingAlarmState()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear the ringing state", e)
+        }
         finish()
     }
 

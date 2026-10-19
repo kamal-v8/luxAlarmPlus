@@ -21,139 +21,161 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.UserManager
 import android.util.Log
 import androidx.core.content.edit
 import com.dsalmun.luxalarmplus.AlarmReceiver
 import com.dsalmun.luxalarmplus.MainActivity
-import java.util.Calendar
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
-class AlarmRepository(private val alarmDao: AlarmDao, private val context: Context) :
-    IAlarmRepository {
+/**
+ * The alarm schedule and the ringing state.
+ *
+ * Room is the source of truth for the schedule, but it lives in
+ * credential-encrypted storage and is therefore unreadable before the user
+ * unlocks the device. Every change is mirrored into [DeviceProtectedAlarmStore]
+ * so that direct-boot aware components (boot receiver, alarm receiver,
+ * watchdog) can still know the schedule and re-arm the alarms.
+ *
+ * All scheduling methods work in both states: unlocked they read and write
+ * Room, locked they fall back to the device-protected snapshot.
+ */
+class AlarmRepository(
+    private val context: Context,
+    private val daoProvider: () -> AlarmDao? = { AlarmDatabase.getDatabase(context).alarmDao() },
+    private val unlockedProvider: () -> Boolean = { isUserUnlocked(context) },
+) : IAlarmRepository {
     private companion object {
         const val TAG = "AlarmRepository"
         const val NEXT_ALARM_REQUEST_CODE = 0
         const val MISSED_ALARM_REQUEST_CODE = 1
         const val PREFS_NAME = "alarm_state"
-        const val KEY_IS_RINGING = "is_ringing"
         const val KEY_V1_MIGRATED = "v1_migrated"
+
+        /** Whether the credential-encrypted storage is readable right now. */
+        fun isUserUnlocked(context: Context): Boolean {
+            val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
+            return userManager.isUserUnlocked()
+        }
     }
 
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val deviceStore = DeviceProtectedAlarmStore(context)
     private val stateStore = AlarmStateStore(context)
 
-    override fun getAllAlarms(): Flow<List<AlarmItem>> = alarmDao.getAllAlarms()
+    override fun getAllAlarms(): Flow<List<AlarmItem>> {
+        val dao = currentDao()
+        return dao?.getAllAlarms() ?: flowOf(deviceStore.loadActiveAlarms())
+    }
 
     override suspend fun addAlarm(hour: Int, minute: Int): Boolean {
+        val dao = currentDao() ?: return false
         val newAlarm = AlarmItem(hour = hour, minute = minute)
-        val newId = alarmDao.insert(newAlarm)
+        val newId = dao.insert(newAlarm)
 
         if (!scheduleNextAlarm()) {
-            alarmDao.delete(newAlarm.copy(id = newId.toInt()))
+            dao.delete(newAlarm.copy(id = newId.toInt()))
+            refreshMirror()
             return false
         }
         return true
     }
 
     override suspend fun toggleAlarm(alarmId: Int, isActive: Boolean): Boolean {
-        val alarm = alarmDao.getAlarmById(alarmId) ?: return true
+        val dao = currentDao() ?: return false
+        val alarm = dao.getAlarmById(alarmId) ?: return true
         val updatedAlarm = alarm.copy(isActive = isActive)
-        alarmDao.update(updatedAlarm)
+        dao.update(updatedAlarm)
 
         if (!scheduleNextAlarm()) {
             // Permission denied - revert the change and signal failure
-            alarmDao.update(alarm)
+            dao.update(alarm)
+            refreshMirror()
             return false
         }
         return true
     }
 
     override suspend fun updateAlarmTime(alarmId: Int, hour: Int, minute: Int): Boolean {
-        val alarm = alarmDao.getAlarmById(alarmId) ?: return true
+        val dao = currentDao() ?: return false
+        val alarm = dao.getAlarmById(alarmId) ?: return true
         val updatedAlarm = alarm.copy(hour = hour, minute = minute, isActive = true)
-        alarmDao.update(updatedAlarm)
+        dao.update(updatedAlarm)
 
         if (!scheduleNextAlarm()) {
             // Permission denied - revert the change and signal failure
-            alarmDao.update(alarm)
+            dao.update(alarm)
+            refreshMirror()
             return false
         }
         return true
     }
 
     override suspend fun deleteAlarm(alarmId: Int) {
-        alarmDao.getAlarmById(alarmId)?.let { alarm ->
-            alarmDao.delete(alarm)
+        val dao = currentDao() ?: return
+        dao.getAlarmById(alarmId)?.let { alarm ->
+            dao.delete(alarm)
             scheduleNextAlarm()
+            refreshMirror()
         }
     }
 
     override suspend fun setRepeatDays(alarmId: Int, repeatDays: Set<Int>) {
-        val alarm = alarmDao.getAlarmById(alarmId) ?: return
+        val dao = currentDao() ?: return
+        val alarm = dao.getAlarmById(alarmId) ?: return
         val updatedAlarm = alarm.copy(repeatDays = repeatDays)
-        alarmDao.update(updatedAlarm)
+        dao.update(updatedAlarm)
         scheduleNextAlarm()
+        refreshMirror()
     }
 
     override suspend fun setAlarmRingtone(alarmId: Int, ringtoneUri: String?) {
-        val alarm = alarmDao.getAlarmById(alarmId) ?: return
+        val dao = currentDao() ?: return
+        val alarm = dao.getAlarmById(alarmId) ?: return
         val updatedAlarm = alarm.copy(ringtoneUri = ringtoneUri)
-        alarmDao.update(updatedAlarm)
+        dao.update(updatedAlarm)
         // Reschedule: ringtone URI is embedded in the PendingIntent extras
         scheduleNextAlarm()
+        refreshMirror()
     }
 
     override suspend fun setAlarmVolume(alarmId: Int, volume: Float?) {
-        val alarm = alarmDao.getAlarmById(alarmId) ?: return
+        val dao = currentDao() ?: return
+        val alarm = dao.getAlarmById(alarmId) ?: return
         val updatedAlarm = alarm.copy(volume = volume?.coerceIn(0f, 1f))
-        alarmDao.update(updatedAlarm)
+        dao.update(updatedAlarm)
         // Reschedule: volume is embedded in the PendingIntent extras
         scheduleNextAlarm()
+        refreshMirror()
     }
 
     override suspend fun setAlarmVibration(alarmId: Int, enabled: Boolean) {
-        val alarm = alarmDao.getAlarmById(alarmId) ?: return
+        val dao = currentDao() ?: return
+        val alarm = dao.getAlarmById(alarmId) ?: return
         val updatedAlarm = alarm.copy(vibrationEnabled = enabled)
-        alarmDao.update(updatedAlarm)
+        dao.update(updatedAlarm)
         // Reschedule: vibration setting is embedded in the PendingIntent extras
         scheduleNextAlarm()
+        refreshMirror()
     }
 
-    override suspend fun scheduleNextAlarm(): Boolean {
-        val activeAlarms = alarmDao.getActiveAlarms()
-
-        if (activeAlarms.isEmpty()) {
-            cancelNextAlarm()
-            cancelMissedAlarm()
-            return true
-        }
-
-        if (!canScheduleExactAlarms()) {
-            Log.w(TAG, "scheduleNextAlarm: cannot schedule exact alarms, permission missing")
-            return false
-        }
-
-        val alarmTriggers =
-            activeAlarms.map { alarm ->
-                alarm to calculateNextTrigger(alarm.hour, alarm.minute, alarm.repeatDays)
-            }
-
-        val minTriggerTime = alarmTriggers.minOf { it.second }
-
-        val nextAlarms =
-            alarmTriggers.filter { it.second == minTriggerTime }.sortedBy { it.first.id }
-        scheduleAlarmAt(minTriggerTime, nextAlarms.map { it.first }, NEXT_ALARM_REQUEST_CODE)
-        // A normal schedule supersedes any stale missed-alarm retry.
-        cancelMissedAlarm()
-        return true
-    }
+    override suspend fun scheduleNextAlarm(): Boolean = scheduleNext(cancelMissedRetry = true)
 
     override suspend fun rescheduleAfterBoot(): Boolean {
-        val activeAlarms = alarmDao.getActiveAlarms()
+        // An alarm that rang while the device was locked could not be
+        // deactivated in Room yet, the deactivation is pending. Apply it
+        // first, otherwise the alarm that just rang would look like a missed
+        // one and would ring a second time.
+        applyPendingDeactivations()
+
+        // Unlocked this reads Room, locked it reads the device-protected
+        // snapshot. Both are the same list of active alarms.
+        val activeAlarms = loadActiveAlarms()
 
         if (activeAlarms.isEmpty()) {
             cancelNextAlarm()
             cancelMissedAlarm()
+            refreshMirror()
             return true
         }
 
@@ -163,11 +185,11 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
         }
 
         val now = System.currentTimeMillis()
-        val missed = findMissedAlarms(activeAlarms, now)
+        val missed = AlarmScheduleCalculator.findMissedAlarms(activeAlarms, now)
 
         if (missed.isEmpty()) {
             Log.i(TAG, "rescheduleAfterBoot: no missed alarms, scheduling next")
-            return scheduleNextAlarm()
+            return scheduleNext(cancelMissedRetry = true)
         }
 
         val sortedMissed = missed.sortedBy { it.id }
@@ -181,15 +203,83 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
         // retry in its own slot. Separate request codes let both coexist, so a
         // reboot doesn't lose alarms after the missed one. The retry fire
         // chain-schedules via AlarmReceiver -> scheduleNextAlarm().
-        val alarmTriggers =
-            activeAlarms.map { alarm ->
-                alarm to calculateNextTrigger(alarm.hour, alarm.minute, alarm.repeatDays)
-            }
-        val minTriggerTime = alarmTriggers.minOf { it.second }
-        val nextAlarms =
-            alarmTriggers.filter { it.second == minTriggerTime }.sortedBy { it.first.id }
-        scheduleAlarmAt(minTriggerTime, nextAlarms.map { it.first }, NEXT_ALARM_REQUEST_CODE)
+        val nextSlot = AlarmScheduleCalculator.nextTriggerSlot(activeAlarms, now)
+        scheduleAlarmAt(nextSlot.triggerAtMillis, nextSlot.alarms, NEXT_ALARM_REQUEST_CODE)
         scheduleAlarmAt(retryAt, sortedMissed, MISSED_ALARM_REQUEST_CODE)
+        refreshMirror()
+        return true
+    }
+
+    /**
+     * Applies the work that could not be done while the device was locked and
+     * re-syncs the device-protected mirror.
+     *
+     * Called from [com.dsalmun.luxalarmplus.UserUnlockedReceiver] as soon as
+     * the user unlocks the device.
+     */
+    override suspend fun syncAfterUnlock() {
+        val dao = currentDao()
+        if (dao == null) {
+            Log.w(TAG, "syncAfterUnlock: device is still locked, nothing to sync")
+            return
+        }
+
+        applyPendingDeactivations()
+
+        refreshMirror()
+        // Re-schedule from the now authoritative Room data. A pending
+        // missed-alarm retry is deliberately kept alive.
+        scheduleNext(cancelMissedRetry = false)
+    }
+
+    /**
+     * Applies the one-shot deactivations that were deferred while the device
+     * was locked. Does nothing while the device is still locked, because Room
+     * is not readable then.
+     */
+    private suspend fun applyPendingDeactivations() {
+        val dao = currentDao() ?: return
+        val pending = deviceStore.consumePendingDeactivations()
+        if (pending.isEmpty()) return
+        Log.i(TAG, "applying ${pending.size} pending deactivation(s) $pending")
+        try {
+            dao.deactivateOneShotAlarms(pending)
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to apply the pending deactivations", e)
+            // Keep them pending, the next attempt has to try again.
+            deviceStore.addPendingDeactivations(pending)
+        }
+    }
+
+    override fun isUserUnlocked(): Boolean =
+        try {
+            unlockedProvider()
+        } catch (e: Exception) {
+            Log.w(TAG, "isUserUnlocked: failed to query the UserManager", e)
+            false
+        }
+
+    private suspend fun scheduleNext(cancelMissedRetry: Boolean): Boolean {
+        val activeAlarms = loadActiveAlarms()
+
+        if (activeAlarms.isEmpty()) {
+            cancelNextAlarm()
+            if (cancelMissedRetry) cancelMissedAlarm()
+            refreshMirror()
+            return true
+        }
+
+        if (!canScheduleExactAlarms()) {
+            Log.w(TAG, "scheduleNextAlarm: cannot schedule exact alarms, permission missing")
+            return false
+        }
+
+        val now = System.currentTimeMillis()
+        val nextSlot = AlarmScheduleCalculator.nextTriggerSlot(activeAlarms, now)
+        scheduleAlarmAt(nextSlot.triggerAtMillis, nextSlot.alarms, NEXT_ALARM_REQUEST_CODE)
+        // A normal schedule supersedes any stale missed-alarm retry.
+        if (cancelMissedRetry) cancelMissedAlarm()
+        refreshMirror()
         return true
     }
 
@@ -233,48 +323,64 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
     }
 
     /**
-     * Alarms that should have fired while the device was off.
-     *
-     * One-shot (empty [AlarmItem.repeatDays]) alarms stay active until they
-     * fire, so an active one-shot whose time today already passed definitely
-     * missed. Repeating alarms stay active after firing, so only treat today
-     * as missed when today is a repeat day and the time passed within
-     * [IAlarmRepository.MISSED_WINDOW_MS] — avoids re-ringing an alarm that
-     * already fired hours before the reboot.
+     * The active alarms, from Room when it is readable and from the
+     * device-protected snapshot while the device is locked.
      */
-    private fun findMissedAlarms(activeAlarms: List<AlarmItem>, now: Long): List<AlarmItem> {
-        val todayDow = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-        return activeAlarms.filter { alarm ->
-            val todayTrigger = calculateTodayTrigger(alarm.hour, alarm.minute)
-            if (todayTrigger > now) return@filter false
-            if (alarm.repeatDays.isEmpty()) {
-                true
-            } else {
-                todayDow in alarm.repeatDays &&
-                    (now - todayTrigger) <= IAlarmRepository.MISSED_WINDOW_MS
+    private suspend fun loadActiveAlarms(): List<AlarmItem> {
+        val dao = currentDao()
+        if (dao != null) {
+            try {
+                val alarms = dao.getActiveAlarms()
+                Log.i(TAG, "loadActiveAlarms: $alarms from Room")
+                return alarms
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read the active alarms from Room", e)
             }
+        }
+        val snapshot = deviceStore.loadActiveAlarms()
+        Log.i(TAG, "loadActiveAlarms: $snapshot from the device-protected snapshot")
+        return snapshot
+    }
+
+    /** Mirrors the current schedule into device-protected storage. */
+    private suspend fun refreshMirror() {
+        val dao = currentDao() ?: return
+        try {
+            deviceStore.saveActiveAlarms(dao.getActiveAlarms())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update the device-protected alarm snapshot", e)
         }
     }
 
-    private fun calculateTodayTrigger(hour: Int, minute: Int): Long =
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+    /**
+     * The Room DAO, or `null` while the device is locked (Room lives in
+     * credential-encrypted storage and cannot be opened before the first
+     * unlock).
+     */
+    private fun currentDao(): AlarmDao? {
+        if (!isUserUnlocked()) {
+            Log.w(TAG, "currentDao: the device is locked, Room is not available")
+            return null
+        }
+        return try {
+            daoProvider()
+        } catch (e: Exception) {
+            Log.w(TAG, "currentDao: failed to open the Room database", e)
+            null
+        }
+    }
 
-    override fun isAlarmRinging(): Boolean = prefs.getBoolean(KEY_IS_RINGING, false)
+    override fun isAlarmRinging(): Boolean = deviceStore.isRinging()
 
     @Synchronized
     override fun setRingingAlarm(): Boolean {
-        if (prefs.getBoolean(KEY_IS_RINGING, false)) return false
-        prefs.edit { putBoolean(KEY_IS_RINGING, true) }
+        if (deviceStore.isRinging()) return false
+        deviceStore.setRinging(true)
         return true
     }
 
     override fun clearRingingAlarm() {
-        prefs.edit { putBoolean(KEY_IS_RINGING, false) }
+        deviceStore.setRinging(false)
     }
 
     override fun saveRingingAlarmState(state: RingingAlarmState) {
@@ -290,12 +396,32 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
     }
 
     override suspend fun deactivateOneShotAlarms(ids: List<Int>) {
-        alarmDao.deactivateOneShotAlarms(ids)
+        if (ids.isEmpty()) return
+        val dao = currentDao()
+        if (dao != null) {
+            try {
+                dao.deactivateOneShotAlarms(ids)
+                refreshMirror()
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "deactivateOneShotAlarms: Room is not writable, deferring $ids", e)
+            }
+        }
+        // Locked: Room cannot be touched, so the deactivation is remembered in
+        // device-protected storage and applied by syncAfterUnlock().
+        Log.w(TAG, "deactivateOneShotAlarms: device locked, deferring $ids")
+        deviceStore.addPendingDeactivations(ids)
+        // Drop them from the mirrored snapshot as well, so a reboot before the
+        // next unlock does not resurrect an alarm that already rang.
+        val remaining = deviceStore.loadActiveAlarms().filterNot { it.id in ids }
+        deviceStore.saveActiveAlarms(remaining)
     }
 
     override suspend fun cancelV1Alarms() {
+        val prefs = credentialPrefs() ?: return
         if (prefs.getBoolean(KEY_V1_MIGRATED, false)) return
-        for (id in alarmDao.getAllAlarmIds()) {
+        val dao = currentDao() ?: return
+        for (id in dao.getAllAlarmIds()) {
             val intent = Intent(context, AlarmReceiver::class.java)
             val pendingIntent =
                 PendingIntent.getBroadcast(
@@ -318,6 +444,22 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
             true
         }
 
+    /**
+     * The credential-encrypted preferences, only readable once the user has
+     * unlocked the device. `null` while locked.
+     */
+    private fun credentialPrefs() =
+        if (!isUserUnlocked()) {
+            null
+        } else {
+            try {
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            } catch (e: Exception) {
+                Log.w(TAG, "credentialPrefs: the preferences are not available", e)
+                null
+            }
+        }
+
     private fun cancelNextAlarm() {
         cancelAlarmSlot(NEXT_ALARM_REQUEST_CODE)
     }
@@ -329,68 +471,15 @@ class AlarmRepository(private val alarmDao: AlarmDao, private val context: Conte
     private fun cancelAlarmSlot(requestCode: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, AlarmReceiver::class.java)
+        // FLAG_NO_CREATE: cancelling a slot must not create a PendingIntent
+        // that was never registered, otherwise the slot would stay alive.
         val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
                 requestCode,
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
             )
-        alarmManager.cancel(pendingIntent)
-    }
-
-    private fun calculateNextTrigger(hour: Int, minute: Int, repeatDays: Set<Int>): Long {
-        val now = Calendar.getInstance()
-        val alarmTime =
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, minute)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-
-        if (repeatDays.isEmpty()) {
-            if (alarmTime.before(now)) {
-                alarmTime.add(Calendar.DAY_OF_MONTH, 1)
-            }
-            return alarmTime.timeInMillis
-        }
-
-        for (i in 0 until 7) {
-            val potentialNextDay = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, i) }
-            val dayOfWeek = potentialNextDay[Calendar.DAY_OF_WEEK]
-
-            if (dayOfWeek in repeatDays) {
-                val triggerTime =
-                    Calendar.getInstance().apply {
-                        time = potentialNextDay.time
-                        set(Calendar.HOUR_OF_DAY, hour)
-                        set(Calendar.MINUTE, minute)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }
-                if (triggerTime.after(now)) {
-                    return triggerTime.timeInMillis
-                }
-            }
-        }
-
-        var firstDayOfWeek = 8
-        for (day in repeatDays) {
-            if (day < firstDayOfWeek) {
-                firstDayOfWeek = day
-            }
-        }
-
-        val nextWeekAlarm =
-            Calendar.getInstance().apply {
-                add(Calendar.WEEK_OF_YEAR, 1)
-                set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, minute)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-        return nextWeekAlarm.timeInMillis
+        pendingIntent?.let { alarmManager.cancel(it) }
     }
 }
